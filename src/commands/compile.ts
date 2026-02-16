@@ -2,6 +2,7 @@ import type { Command } from "commander";
 
 import { Frontmatter } from "@/compiler/frontmatter.js";
 import { RoleCompiler } from "@/compiler/role-compiler.js";
+import { PraxisConfig } from "@/core/config.js";
 import { Logger } from "@/core/logger.js";
 import { Paths } from "@/core/paths.js";
 
@@ -10,9 +11,8 @@ import fg from "fast-glob";
 /**
  * Registers the `praxis compile` command.
  *
- * Compiles role definitions into standalone Claude Code agent
- * files by inlining all referenced content (responsibilities,
- * constitution, context, references).
+ * Compiles role definitions into agent profile files and runs
+ * any enabled plugins (e.g. Claude Code) based on praxis.config.json.
  */
 export function registerCompileCommand(program: Command): void {
   program
@@ -24,7 +24,8 @@ export function registerCompileCommand(program: Command): void {
 
       try {
         const paths = new Paths();
-        const compiler = new RoleCompiler({ root: paths.root, logger });
+        const config = new PraxisConfig(paths.root);
+        const compiler = new RoleCompiler({ root: paths.root, logger, config });
 
         if (options.alias) {
           await compileOne(paths, compiler, logger, options.alias);

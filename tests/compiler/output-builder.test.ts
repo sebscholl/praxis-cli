@@ -86,6 +86,48 @@ describe("OutputBuilder", () => {
     });
   });
 
+  describe("buildProfile()", () => {
+    it("assembles sections in correct order without frontmatter", () => {
+      const builder = new OutputBuilder({
+        agentMetadata: { name: "test", description: "Test agent" },
+      });
+      builder.addRole("Role body");
+      builder.addResponsibilities(["Resp 1"]);
+      builder.addConstitution(["Const 1"]);
+      builder.addContext(["Ctx 1"]);
+      builder.addReference(["Ref 1"]);
+
+      const profile = builder.buildProfile();
+
+      // No frontmatter
+      expect(profile).not.toMatch(/^---\n/);
+      expect(profile).not.toContain("name: test");
+
+      // Sections in order
+      const rolePos = profile.indexOf("# Role");
+      const respPos = profile.indexOf("# Responsibilities");
+      const constPos = profile.indexOf("# Constitution");
+      const ctxPos = profile.indexOf("# Context");
+      const refPos = profile.indexOf("# Reference");
+
+      expect(rolePos).toBeLessThan(respPos);
+      expect(respPos).toBeLessThan(constPos);
+      expect(constPos).toBeLessThan(ctxPos);
+      expect(ctxPos).toBeLessThan(refPos);
+    });
+
+    it("omits empty sections", () => {
+      const builder = new OutputBuilder();
+      builder.addRole("Role body");
+
+      const profile = builder.buildProfile();
+
+      expect(profile).toContain("# Role");
+      expect(profile).not.toContain("# Responsibilities");
+      expect(profile).not.toContain("# Constitution");
+    });
+  });
+
   describe("build()", () => {
     it("assembles sections in correct order", () => {
       const builder = new OutputBuilder();

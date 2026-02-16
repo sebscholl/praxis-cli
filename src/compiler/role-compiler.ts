@@ -1,8 +1,9 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
-import { basename, dirname, join } from "node:path";
+import { basename, join } from "node:path";
 
 import fg from "fast-glob";
 
+import { PraxisConfig } from "@/core/config.js";
 import { Logger } from "@/core/logger.js";
 import { Paths } from "@/core/paths.js";
 
@@ -10,43 +11,49 @@ import { Frontmatter } from "./frontmatter.js";
 import { GlobExpander } from "./glob-expander.js";
 import { Markdown } from "./markdown.js";
 import { type AgentMetadata, OutputBuilder } from "./output-builder.js";
+import { resolvePlugins } from "./plugin-registry.js";
 
 /** Files excluded when scanning the roles directory for compilation. */
 const EXCLUDED_FILES = ["_template.md", "README.md"];
 
 /**
- * Compiles role definition files into standalone Claude Code agent files.
+ * Compiles role definition files into agent profiles and plugin-specific output.
  *
  * Reads a role's frontmatter manifest, resolves all referenced content
  * (constitution, context, responsibilities, references), inlines their
- * body content (stripping frontmatter), and writes a single self-contained
- * agent markdown file to the output directory.
+ * body content (stripping frontmatter), and writes output based on config:
+ *
+ * - Pure agent profiles to `agentProfilesDir` (if configured)
+ * - Plugin-specific output for each enabled plugin (e.g. Claude Code)
  */
 export class RoleCompiler {
   private readonly root: string;
   private readonly logger: Logger;
+  private readonly config: PraxisConfig;
   private readonly globExpander: GlobExpander;
 
   constructor({
     root,
     logger = new Logger(),
+    config,
   }: {
     root: string;
     logger?: Logger;
+    config?: PraxisConfig;
   }) {
     this.root = root;
     this.logger = logger;
+    this.config = config ?? new PraxisConfig(root);
     this.globExpander = new GlobExpander(root);
   }
 
   /**
-   * Compiles a single role file into an agent output file.
+   * Compiles a single role file, writing output based on config.
    *
    * @param roleFile - Absolute path to the role markdown file
-   * @param outputFile - Optional output path; defaults to agents dir using alias
-   * @returns The output file path, or null if the role was skipped
+   * @returns The role alias, or null if the role was skipped
    */
-  async compile(roleFile: string, outputFile?: string): Promise<string | null> {
+  async compile(roleFile: string): Promise<string | null> {
     const fm = new Frontmatter(roleFile);
     const roleAlias = fm.value("alias") as string | undefined;
 
@@ -55,27 +62,11 @@ export class RoleCompiler {
       return null;
     }
 
-    const resolvedOutputFile = outputFile ?? this.defaultOutputPath(roleAlias);
-    const relativeRole = this.relativePath(roleFile);
-    const md = new Markdown(roleFile);
-    const agentMetadata = this.buildAgentMetadata(fm, roleAlias);
-
-    const builder = new OutputBuilder({ agentMetadata });
-
-    builder.addRole(md.body());
-    builder.addResponsibilities(await this.inlineRefs(fm, "responsibilities"));
-    builder.addConstitution(await this.inlineConstitution(fm));
-    builder.addContext(await this.inlineRefs(fm, "context"));
-    builder.addReference(await this.inlineRefs(fm, "refs"));
-
-    const outputDir = dirname(resolvedOutputFile);
-    if (!existsSync(outputDir)) {
-      mkdirSync(outputDir, { recursive: true });
-    }
-    writeFileSync(resolvedOutputFile, builder.build());
+    const { profile, metadata } = await this.buildRoleProfile(roleFile, fm, roleAlias);
+    this.writeOutputs(profile, metadata, roleAlias);
 
     this.logger.success(`Compiled ${roleAlias.toLowerCase()}.md`);
-    return resolvedOutputFile;
+    return roleAlias;
   }
 
   /**
@@ -87,11 +78,6 @@ export class RoleCompiler {
    */
   async compileAll(): Promise<{ compiled: number }> {
     const paths = new Paths(this.root);
-    const agentsDir = paths.agentsDir;
-
-    if (!existsSync(agentsDir)) {
-      mkdirSync(agentsDir, { recursive: true });
-    }
 
     const roleFiles = await fg("*.md", {
       cwd: paths.rolesDir,
@@ -113,8 +99,10 @@ export class RoleCompiler {
         continue;
       }
 
-      const outputFile = join(agentsDir, `${roleAlias.toLowerCase()}.md`);
-      await this.compile(roleFile, outputFile);
+      const { profile, metadata } = await this.buildRoleProfile(roleFile, fm, roleAlias);
+      this.writeOutputs(profile, metadata, roleAlias);
+
+      this.logger.success(`Compiled ${roleAlias.toLowerCase()}.md`);
       compiled++;
     }
 
@@ -123,21 +111,47 @@ export class RoleCompiler {
   }
 
   /**
-   * Derives the default output path for a compiled agent.
-   *
-   * @param roleAlias - The role's alias field from frontmatter
+   * Builds the pure profile content and metadata for a role.
    */
-  private defaultOutputPath(roleAlias: string): string {
-    const paths = new Paths(this.root);
-    return join(paths.agentsDir, `${roleAlias.toLowerCase()}.md`);
+  private async buildRoleProfile(
+    roleFile: string,
+    fm: Frontmatter,
+    roleAlias: string,
+  ): Promise<{ profile: string; metadata: AgentMetadata | null }> {
+    const md = new Markdown(roleFile);
+    const metadata = this.buildAgentMetadata(fm, roleAlias);
+    const builder = new OutputBuilder();
+
+    builder.addRole(md.body());
+    builder.addResponsibilities(await this.inlineRefs(fm, "responsibilities"));
+    builder.addConstitution(await this.inlineConstitution(fm));
+    builder.addContext(await this.inlineRefs(fm, "context"));
+    builder.addReference(await this.inlineRefs(fm, "refs"));
+
+    return { profile: builder.buildProfile(), metadata };
   }
 
   /**
-   * Converts an absolute path to a path relative to the project root.
+   * Routes compiled output to configured destinations.
+   *
+   * Writes pure profiles to agentProfilesDir (if set), then
+   * delegates to each enabled plugin for platform-specific output.
    */
-  private relativePath(absolutePath: string): string {
-    const prefix = this.root + "/";
-    return absolutePath.startsWith(prefix) ? absolutePath.slice(prefix.length) : absolutePath;
+  private writeOutputs(profile: string, metadata: AgentMetadata | null, roleAlias: string): void {
+    // Write pure agent profile if configured
+    const profilesDir = this.config.agentProfilesDir;
+    if (profilesDir) {
+      if (!existsSync(profilesDir)) {
+        mkdirSync(profilesDir, { recursive: true });
+      }
+      writeFileSync(join(profilesDir, `${roleAlias.toLowerCase()}.md`), profile);
+    }
+
+    // Run each enabled plugin
+    const plugins = resolvePlugins(this.config.plugins, this.root, this.logger);
+    for (const plugin of plugins) {
+      plugin.compile(profile, metadata, roleAlias);
+    }
   }
 
   /**
@@ -197,7 +211,7 @@ export class RoleCompiler {
   }
 
   /**
-   * Builds Claude Code agent metadata from role frontmatter.
+   * Builds agent metadata from role frontmatter.
    *
    * Extracts the agent name (from alias), description, and optional
    * fields (tools, model, permission mode). Returns null if no

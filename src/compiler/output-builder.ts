@@ -5,7 +5,10 @@ const SEPARATOR = "\n---\n";
 const BLANK_SEPARATOR = "\n";
 
 /**
- * Metadata for generating Claude Code agent frontmatter in compiled output.
+ * Metadata extracted from role frontmatter for agent compilation.
+ *
+ * Used by plugins to generate platform-specific output (e.g. Claude Code
+ * frontmatter). The fields map to role frontmatter keys prefixed with `agent_`.
  */
 export interface AgentMetadata {
   /** Agent name (lowercase, hyphenated). */
@@ -68,17 +71,14 @@ export class OutputBuilder {
   }
 
   /**
-   * Assembles all sections into the final compiled output string.
+   * Assembles all content sections into a pure profile markdown string.
    *
-   * Sections with no content are omitted entirely.
+   * Contains no plugin-specific frontmatter — just the structured
+   * sections (Role, Responsibilities, Constitution, Context, Reference).
+   * Sections with no content are omitted.
    */
-  build(): string {
+  buildProfile(): string {
     const sections: string[] = [];
-
-    const frontmatter = this.buildClaudeCodeFrontmatter();
-    if (frontmatter) {
-      sections.push(frontmatter);
-    }
 
     if (this.role) {
       sections.push(this.buildSection("Role", [this.role], BLANK_SEPARATOR));
@@ -97,6 +97,22 @@ export class OutputBuilder {
     }
 
     return sections.join("\n");
+  }
+
+  /**
+   * Assembles all sections with Claude Code frontmatter prepended.
+   *
+   * @deprecated Use `buildProfile()` and a plugin compiler instead.
+   * Kept for backward compatibility.
+   */
+  build(): string {
+    const frontmatter = this.buildClaudeCodeFrontmatter();
+    const profile = this.buildProfile();
+
+    if (frontmatter) {
+      return frontmatter + "\n" + profile;
+    }
+    return profile;
   }
 
   /**

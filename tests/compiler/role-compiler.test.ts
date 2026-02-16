@@ -5,6 +5,7 @@ import { Writable } from "node:stream";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { Logger } from "@/core/logger.js";
+import { PraxisConfig } from "@/core/config.js";
 import { RoleCompiler } from "@/compiler/role-compiler.js";
 
 import { createCompilerTmpdir } from "../helpers/compiler-tmpdir.js";
@@ -13,6 +14,7 @@ describe("RoleCompiler", () => {
   let tmpdir: string;
   let rolesDir: string;
   let agentsOutputDir: string;
+  let agentProfilesDir: string;
   let cleanup: () => void;
   let logOutput: string;
   let logger: Logger;
@@ -23,6 +25,7 @@ describe("RoleCompiler", () => {
     tmpdir = ctx.tmpdir;
     rolesDir = ctx.rolesDir;
     agentsOutputDir = ctx.agentsOutputDir;
+    agentProfilesDir = ctx.agentProfilesDir;
     cleanup = ctx.cleanup;
 
     logOutput = "";
@@ -41,21 +44,20 @@ describe("RoleCompiler", () => {
   });
 
   describe("compile()", () => {
-    it("compiles a single role to an output file", async () => {
+    it("compiles a single role to agent output and profile", async () => {
       const roleFile = join(rolesDir, "test-role.md");
-      const outputFile = join(agentsOutputDir, "tester.md");
 
-      await compiler.compile(roleFile, outputFile);
+      await compiler.compile(roleFile);
 
-      expect(existsSync(outputFile)).toBe(true);
+      expect(existsSync(join(agentsOutputDir, "tester.md"))).toBe(true);
+      expect(existsSync(join(agentProfilesDir, "tester.md"))).toBe(true);
     });
 
-    it("includes the role body in output", async () => {
+    it("includes the role body in plugin output", async () => {
       const roleFile = join(rolesDir, "test-role.md");
-      const outputFile = join(agentsOutputDir, "tester.md");
 
-      await compiler.compile(roleFile, outputFile);
-      const content = readFileSync(outputFile, "utf-8");
+      await compiler.compile(roleFile);
+      const content = readFileSync(join(agentsOutputDir, "tester.md"), "utf-8");
 
       expect(content).toContain("# Role");
       expect(content).toContain("A test role for unit testing");
@@ -63,10 +65,9 @@ describe("RoleCompiler", () => {
 
     it("expands constitution: true to glob all constitution files", async () => {
       const roleFile = join(rolesDir, "test-role.md");
-      const outputFile = join(agentsOutputDir, "tester.md");
 
-      await compiler.compile(roleFile, outputFile);
-      const content = readFileSync(outputFile, "utf-8");
+      await compiler.compile(roleFile);
+      const content = readFileSync(join(agentsOutputDir, "tester.md"), "utf-8");
 
       expect(content).toContain("# Constitution");
       expect(content).toContain("Identity");
@@ -75,39 +76,28 @@ describe("RoleCompiler", () => {
 
     it("includes context section from context frontmatter key", async () => {
       const roleFile = join(rolesDir, "test-role.md");
-      const outputFile = join(agentsOutputDir, "tester.md");
 
-      await compiler.compile(roleFile, outputFile);
-      const content = readFileSync(outputFile, "utf-8");
+      await compiler.compile(roleFile);
+      const content = readFileSync(join(agentsOutputDir, "tester.md"), "utf-8");
 
       expect(content).toContain("# Context");
     });
 
     it("inlines referenced files (strips their frontmatter)", async () => {
       const roleFile = join(rolesDir, "test-role.md");
-      const outputFile = join(agentsOutputDir, "tester.md");
 
-      await compiler.compile(roleFile, outputFile);
-      const content = readFileSync(outputFile, "utf-8");
+      await compiler.compile(roleFile);
+      const content = readFileSync(join(agentsOutputDir, "tester.md"), "utf-8");
 
       expect(content).toContain("Test Responsibility");
       expect(content).not.toMatch(/owner: test-role/);
     });
 
-    it("generates output file path from alias when not specified", async () => {
+    it("includes agent_description in Claude Code plugin frontmatter", async () => {
       const roleFile = join(rolesDir, "test-role.md");
 
-      const result = await compiler.compile(roleFile);
-
-      expect(result).toBe(join(agentsOutputDir, "tester.md"));
-    });
-
-    it("includes agent_description in compiled output frontmatter", async () => {
-      const roleFile = join(rolesDir, "test-role.md");
-      const outputFile = join(agentsOutputDir, "tester.md");
-
-      await compiler.compile(roleFile, outputFile);
-      const content = readFileSync(outputFile, "utf-8");
+      await compiler.compile(roleFile);
+      const content = readFileSync(join(agentsOutputDir, "tester.md"), "utf-8");
 
       expect(content).toMatch(/^description:/m);
     });
@@ -115,9 +105,8 @@ describe("RoleCompiler", () => {
     it("warns when agent_description is missing", async () => {
       const noDesc = join(rolesDir, "no-desc.md");
       writeFileSync(noDesc, "---\nalias: NoDesc\n---\n# Test");
-      const outputFile = join(agentsOutputDir, "nodesc.md");
 
-      await compiler.compile(noDesc, outputFile);
+      await compiler.compile(noDesc);
 
       expect(logOutput).toContain("No agent_description found");
     });
@@ -125,10 +114,9 @@ describe("RoleCompiler", () => {
     it("does not fallback to blockquote for missing agent_description", async () => {
       const withBlockquote = join(rolesDir, "blockquote.md");
       writeFileSync(withBlockquote, "---\nalias: Block\n---\n> Blockquote text");
-      const outputFile = join(agentsOutputDir, "block.md");
 
-      await compiler.compile(withBlockquote, outputFile);
-      const content = readFileSync(outputFile, "utf-8");
+      await compiler.compile(withBlockquote);
+      const content = readFileSync(join(agentsOutputDir, "block.md"), "utf-8");
 
       expect(content).not.toMatch(/^description: Blockquote text/m);
     });
@@ -163,6 +151,64 @@ describe("RoleCompiler", () => {
       const result = await compiler.compileAll();
 
       expect(result).toBeTypeOf("object");
+    });
+  });
+
+  describe("config-driven output", () => {
+    it("writes pure profiles without frontmatter to agentProfilesDir", async () => {
+      const roleFile = join(rolesDir, "test-role.md");
+
+      await compiler.compile(roleFile);
+      const profile = readFileSync(join(agentProfilesDir, "tester.md"), "utf-8");
+
+      // Pure profile has no frontmatter
+      expect(profile).not.toMatch(/^---\n/);
+      expect(profile).toContain("# Role");
+    });
+
+    it("writes Claude Code frontmatter only in plugin output", async () => {
+      const roleFile = join(rolesDir, "test-role.md");
+
+      await compiler.compile(roleFile);
+
+      const pluginOutput = readFileSync(join(agentsOutputDir, "tester.md"), "utf-8");
+      const profileOutput = readFileSync(join(agentProfilesDir, "tester.md"), "utf-8");
+
+      expect(pluginOutput).toMatch(/^---\n/);
+      expect(pluginOutput).toContain("name: tester");
+      expect(profileOutput).not.toContain("name: tester");
+    });
+
+    it("skips profile output when agentProfilesDir is false", async () => {
+      // Create compiler with profiles disabled
+      writeFileSync(
+        join(tmpdir, "praxis.config.json"),
+        JSON.stringify({ agentProfilesDir: false, plugins: ["claude-code"] }),
+      );
+      const noProfileCompiler = new RoleCompiler({ root: tmpdir, logger });
+      const roleFile = join(rolesDir, "test-role.md");
+
+      await noProfileCompiler.compile(roleFile);
+
+      // Plugin output exists, profile dir does not
+      expect(existsSync(join(agentsOutputDir, "tester.md"))).toBe(true);
+      expect(existsSync(join(agentProfilesDir, "tester.md"))).toBe(false);
+    });
+
+    it("skips plugin output when plugins array is empty", async () => {
+      // Create compiler with no plugins
+      writeFileSync(
+        join(tmpdir, "praxis.config.json"),
+        JSON.stringify({ agentProfilesDir: "./agent-profiles", plugins: [] }),
+      );
+      const noPluginCompiler = new RoleCompiler({ root: tmpdir, logger });
+      const roleFile = join(rolesDir, "test-role.md");
+
+      await noPluginCompiler.compile(roleFile);
+
+      // Profile exists, plugin output does not
+      expect(existsSync(join(agentProfilesDir, "tester.md"))).toBe(true);
+      expect(existsSync(join(agentsOutputDir, "tester.md"))).toBe(false);
     });
   });
 });

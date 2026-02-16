@@ -22,6 +22,7 @@ function makeTmpdir(): string {
  */
 function walkDir(dir: string, base = dir): string[] {
   const results: string[] = [];
+  if (!existsSync(dir)) return results;
   for (const entry of readdirSync(dir)) {
     const fullPath = join(dir, entry);
     if (statSync(fullPath).isDirectory()) {
@@ -53,39 +54,74 @@ describe("initProject", () => {
     expect(existsSync(dir)).toBe(true);
   });
 
-  it("writes all scaffold files", () => {
+  it("writes all core scaffold files", () => {
     const dir = makeTmpdir();
     dirs.push(dir);
 
     initProject(dir, logger, SCAFFOLD_DIR);
 
-    for (const relPath of walkDir(SCAFFOLD_DIR)) {
+    const coreDir = join(SCAFFOLD_DIR, "core");
+    for (const relPath of walkDir(coreDir)) {
       const fullPath = join(dir, relPath);
       expect(existsSync(fullPath), `expected ${relPath} to exist`).toBe(true);
     }
   });
 
-  it("writes correct content for each scaffold file", () => {
+  it("writes correct content for each core scaffold file", () => {
     const dir = makeTmpdir();
     dirs.push(dir);
 
     initProject(dir, logger, SCAFFOLD_DIR);
 
-    for (const relPath of walkDir(SCAFFOLD_DIR)) {
-      const expected = readFileSync(join(SCAFFOLD_DIR, relPath), "utf-8");
+    const coreDir = join(SCAFFOLD_DIR, "core");
+    for (const relPath of walkDir(coreDir)) {
+      const expected = readFileSync(join(coreDir, relPath), "utf-8");
       const actual = readFileSync(join(dir, relPath), "utf-8");
       expect(actual, `content mismatch for ${relPath}`).toBe(expected);
     }
   });
 
-  it("creates the agents output directory", () => {
+  it("scaffolds praxis.config.json", () => {
     const dir = makeTmpdir();
     dirs.push(dir);
 
     initProject(dir, logger, SCAFFOLD_DIR);
 
-    const agentsDir = join(dir, "plugins", "praxis", "agents");
-    expect(existsSync(agentsDir)).toBe(true);
+    const configPath = join(dir, "praxis.config.json");
+    expect(existsSync(configPath)).toBe(true);
+
+    const config = JSON.parse(readFileSync(configPath, "utf-8"));
+    expect(config.agentProfilesDir).toBe("./agent-profiles");
+    expect(config.plugins).toEqual([]);
+  });
+
+  it("does not scaffold Claude Code files by default", () => {
+    const dir = makeTmpdir();
+    dirs.push(dir);
+
+    initProject(dir, logger, SCAFFOLD_DIR);
+
+    // Default config has plugins: [], so no Claude Code files
+    expect(existsSync(join(dir, ".claude-plugin"))).toBe(false);
+    expect(existsSync(join(dir, "plugins", "praxis"))).toBe(false);
+  });
+
+  it("scaffolds Claude Code files when plugin is in config", () => {
+    const dir = makeTmpdir();
+    dirs.push(dir);
+
+    // Pre-create config with claude-code plugin enabled
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, "praxis.config.json"),
+      JSON.stringify({ agentProfilesDir: "./agent-profiles", plugins: ["claude-code"] }),
+    );
+
+    initProject(dir, logger, SCAFFOLD_DIR);
+
+    expect(existsSync(join(dir, ".claude-plugin", "marketplace.json"))).toBe(true);
+    expect(existsSync(join(dir, "plugins", "praxis", ".claude-plugin", "plugin.json"))).toBe(true);
+    expect(existsSync(join(dir, "plugins", "praxis", "commands", "huddle.md"))).toBe(true);
   });
 
   it("skips files that already exist", () => {
@@ -139,7 +175,7 @@ describe("initProject", () => {
     expect(readFileSync(join(dir, "package.json"), "utf-8")).toBe('{ "name": "my-app" }\n');
   });
 
-  it("creates all expected directories", () => {
+  it("creates all expected core directories", () => {
     const dir = makeTmpdir();
     dirs.push(dir);
 
@@ -152,7 +188,27 @@ describe("initProject", () => {
       "content/roles",
       "content/responsibilities",
       "content/reference",
-      "plugins/praxis/agents",
+    ];
+
+    for (const expected of expectedDirs) {
+      expect(existsSync(join(dir, expected)), `expected directory ${expected} to exist`).toBe(true);
+    }
+  });
+
+  it("creates Claude Code directories when plugin is enabled", () => {
+    const dir = makeTmpdir();
+    dirs.push(dir);
+
+    // Pre-create config with claude-code enabled
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, "praxis.config.json"),
+      JSON.stringify({ plugins: ["claude-code"] }),
+    );
+
+    initProject(dir, logger, SCAFFOLD_DIR);
+
+    const expectedDirs = [
       "plugins/praxis/.claude-plugin",
       "plugins/praxis/commands",
       ".claude-plugin",

@@ -1,4 +1,4 @@
-import { cpSync, existsSync, mkdirSync, rmSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
@@ -9,10 +9,11 @@ const FIXTURES_ROOT = join(import.meta.dirname, "..", "fixtures");
 /**
  * Creates a temporary directory pre-populated with test fixtures.
  *
- * Mirrors the Ruby `compiler_tmpdir` shared context. Creates a fake
- * project root with `content/` subdirectories, and copies
- * all test fixtures into it. Returns an object with path accessors
- * and a cleanup function.
+ * Creates a fake project root with `content/` subdirectories,
+ * copies all test fixtures into it, and writes a `praxis.config.json`
+ * that enables the claude-code plugin for backward-compatible test behavior.
+ *
+ * Returns an object with path accessors and a cleanup function.
  */
 export function createCompilerTmpdir(): {
   tmpdir: string;
@@ -20,6 +21,7 @@ export function createCompilerTmpdir(): {
   responsibilitiesDir: string;
   contextDir: string;
   agentsOutputDir: string;
+  agentProfilesDir: string;
   cleanup: () => void;
 } {
   const dir = join(tmpdir(), `praxis-test-${randomUUID()}`);
@@ -28,12 +30,12 @@ export function createCompilerTmpdir(): {
   const responsibilitiesDir = join(dir, "content", "responsibilities");
   const contextDir = join(dir, "content", "context");
   const agentsOutputDir = join(dir, "plugins", "praxis", "agents");
+  const agentProfilesDir = join(dir, "agent-profiles");
 
   // Create structure
   mkdirSync(rolesDir, { recursive: true });
   mkdirSync(responsibilitiesDir, { recursive: true });
   mkdirSync(contextDir, { recursive: true });
-  mkdirSync(agentsOutputDir, { recursive: true });
 
   // Copy fixtures
   const contentSource = join(FIXTURES_ROOT, "content");
@@ -41,12 +43,22 @@ export function createCompilerTmpdir(): {
     cpSync(contentSource, join(dir, "content"), { recursive: true });
   }
 
+  // Write default config enabling claude-code plugin
+  writeFileSync(
+    join(dir, "praxis.config.json"),
+    JSON.stringify({
+      agentProfilesDir: "./agent-profiles",
+      plugins: ["claude-code"],
+    }),
+  );
+
   return {
     tmpdir: dir,
     rolesDir,
     responsibilitiesDir,
     contextDir,
     agentsOutputDir,
+    agentProfilesDir,
     cleanup: () => rmSync(dir, { recursive: true, force: true }),
   };
 }

@@ -3,6 +3,7 @@ import { dirname, join, relative, resolve } from "node:path";
 
 import type { Command } from "commander";
 
+import { PraxisConfig } from "@/core/config.js";
 import { Logger } from "@/core/logger.js";
 
 /**
@@ -16,9 +17,8 @@ const SCAFFOLD_DIR = join(import.meta.dirname, "..", "scaffold");
 /**
  * Registers the `praxis init` command.
  *
- * Scaffolds a new Praxis project by copying framework files,
- * placeholder content, and the Claude Code plugin structure
- * into the target directory.
+ * Scaffolds a new Praxis project by copying core framework files and
+ * plugin-specific files based on config into the target directory.
  */
 export function registerInitCommand(program: Command): void {
   program
@@ -39,12 +39,13 @@ export function registerInitCommand(program: Command): void {
 }
 
 /**
- * Copies all scaffold files into the target directory.
+ * Scaffolds a Praxis project into the target directory.
  *
- * Recursively walks the scaffold directory and copies each file
- * to the corresponding location in the target. Skips files that
- * already exist to avoid overwriting user content. Logs each
- * created file and prints next-steps guidance when complete.
+ * 1. Copies all core scaffold files (content, config, README, etc.)
+ * 2. Reads the scaffolded config to determine which plugins are enabled
+ * 3. Copies plugin-specific scaffold files for each enabled plugin
+ *
+ * Skips files that already exist to avoid overwriting user content.
  *
  * @param targetDir - Absolute path to the project root
  * @param logger - Logger instance for output
@@ -58,8 +59,50 @@ export function initProject(targetDir: string, logger: Logger, scaffoldDir = SCA
   let created = 0;
   let skipped = 0;
 
-  for (const relPath of walkDir(scaffoldDir)) {
-    const srcPath = join(scaffoldDir, relPath);
+  // Step 1: Copy core scaffold files
+  const coreDir = join(scaffoldDir, "core");
+  const coreResult = copyScaffoldDir(coreDir, targetDir, logger);
+  created += coreResult.created;
+  skipped += coreResult.skipped;
+
+  // Step 2: Read config to determine which plugins to scaffold
+  const config = new PraxisConfig(targetDir);
+
+  // Step 3: Copy plugin scaffold files for each enabled plugin
+  for (const pluginName of config.plugins) {
+    const pluginScaffoldDir = join(scaffoldDir, "plugins", pluginName);
+    if (existsSync(pluginScaffoldDir)) {
+      const pluginResult = copyScaffoldDir(pluginScaffoldDir, targetDir, logger);
+      created += pluginResult.created;
+      skipped += pluginResult.skipped;
+    }
+  }
+
+  console.log();
+  logger.info(`Initialized Praxis project: ${created} files created, ${skipped} skipped`);
+  console.log();
+  console.log("Next steps:");
+  console.log("  1. Edit content/context/constitution/ to define your organization's identity");
+  console.log("  2. Edit content/context/conventions/ to document your standards");
+  console.log("  3. Run `praxis compile` to generate agent files");
+  console.log("  4. Define new roles in content/roles/ as your organization grows");
+}
+
+/**
+ * Copies all files from a scaffold source directory into a target directory.
+ *
+ * @returns Count of files created and skipped
+ */
+function copyScaffoldDir(
+  sourceDir: string,
+  targetDir: string,
+  logger: Logger,
+): { created: number; skipped: number } {
+  let created = 0;
+  let skipped = 0;
+
+  for (const relPath of walkDir(sourceDir)) {
+    const srcPath = join(sourceDir, relPath);
     const destPath = join(targetDir, relPath);
     const destDir = dirname(destPath);
 
@@ -77,20 +120,7 @@ export function initProject(targetDir: string, logger: Logger, scaffoldDir = SCA
     created++;
   }
 
-  // Create empty agents directory for compile output
-  const agentsDir = join(targetDir, "plugins", "praxis", "agents");
-  if (!existsSync(agentsDir)) {
-    mkdirSync(agentsDir, { recursive: true });
-  }
-
-  console.log();
-  logger.info(`Initialized Praxis project: ${created} files created, ${skipped} skipped`);
-  console.log();
-  console.log("Next steps:");
-  console.log("  1. Edit content/context/constitution/ to define your organization's identity");
-  console.log("  2. Edit content/context/conventions/ to document your standards");
-  console.log("  3. Run `praxis compile` to generate agent files");
-  console.log("  4. Define new roles in content/roles/ as your organization grows");
+  return { created, skipped };
 }
 
 /**

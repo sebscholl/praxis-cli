@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
@@ -16,9 +16,9 @@ const SCAFFOLD_DIR = join(import.meta.dirname, "..", "..", "scaffold");
 /**
  * Integration test: init → compile → verify output.
  *
- * Scaffolds a fresh Praxis project via initProject, runs the
- * compiler, and verifies that agent files are produced with the
- * expected structure.
+ * Scaffolds a fresh Praxis project via initProject, enables the
+ * claude-code plugin via config, runs the compiler, and verifies
+ * that agent files are produced with the expected structure.
  */
 describe("init → compile integration", () => {
   let dir: string;
@@ -30,6 +30,15 @@ describe("init → compile integration", () => {
     // Scaffold the project (creates content/ which Paths uses for root detection)
     initProject(dir, logger, SCAFFOLD_DIR);
 
+    // Write config enabling both profiles and claude-code plugin
+    writeFileSync(
+      join(dir, "praxis.config.json"),
+      JSON.stringify({
+        agentProfilesDir: "./agent-profiles",
+        plugins: ["claude-code"],
+      }),
+    );
+
     // Compile all roles
     const compiler = new RoleCompiler({ root: dir, logger });
     await compiler.compileAll();
@@ -39,20 +48,33 @@ describe("init → compile integration", () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  it("produces stewart.md agent file", () => {
+  it("produces stewart.md Claude Code agent file", () => {
     const agentFile = join(dir, "plugins", "praxis", "agents", "stewart.md");
     expect(existsSync(agentFile)).toBe(true);
   });
 
-  it("produces remy.md agent file", () => {
+  it("produces remy.md Claude Code agent file", () => {
     const agentFile = join(dir, "plugins", "praxis", "agents", "remy.md");
     expect(existsSync(agentFile)).toBe(true);
   });
 
-  it("produces exactly 2 agent files", () => {
+  it("produces exactly 2 Claude Code agent files", () => {
     const agentsDir = join(dir, "plugins", "praxis", "agents");
     const files = readdirSync(agentsDir).filter((f) => f.endsWith(".md"));
     expect(files).toHaveLength(2);
+  });
+
+  it("produces exactly 2 pure agent profile files", () => {
+    const profilesDir = join(dir, "agent-profiles");
+    const files = readdirSync(profilesDir).filter((f) => f.endsWith(".md"));
+    expect(files).toHaveLength(2);
+  });
+
+  it("pure profiles do not contain Claude Code frontmatter", () => {
+    const content = readFileSync(join(dir, "agent-profiles", "stewart.md"), "utf-8");
+    expect(content).not.toMatch(/^---\n/);
+    expect(content).not.toContain("name: stewart");
+    expect(content).toContain("# Role");
   });
 
   it("stewart agent has Claude Code frontmatter", () => {
@@ -97,10 +119,6 @@ describe("init → compile integration", () => {
 
   it("compiled agents do not contain raw frontmatter blocks from inlined files", () => {
     const content = readFileSync(join(dir, "plugins", "praxis", "agents", "stewart.md"), "utf-8");
-    // Inlined files (responsibilities, references, etc.) should have their
-    // YAML frontmatter stripped. Verify no stray frontmatter blocks exist by
-    // checking that typical inlined-file frontmatter keys don't appear in
-    // a YAML block pattern after the initial agent frontmatter.
     const lines = content.split("\n");
 
     // Find the end of the Claude Code frontmatter (second "---")
@@ -119,10 +137,8 @@ describe("init → compile integration", () => {
     // After the agent frontmatter, there should be no "type: responsibility"
     // or "type: reference" frontmatter blocks (those come from inlined files)
     const body = lines.slice(frontmatterEnd + 1).join("\n");
-    // These patterns would indicate a frontmatter block wasn't stripped
     expect(body).not.toMatch(/^type: responsibility$/m);
     expect(body).not.toMatch(/^type: reference$/m);
     expect(body).not.toMatch(/^owner: /m);
   });
 });
-
