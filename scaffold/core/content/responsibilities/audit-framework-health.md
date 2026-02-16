@@ -1,16 +1,8 @@
 ---
 title: Audit Framework Health
 type: responsibility
-owner: praxis-steward
+owner: stewart
 schedule: weekly
-refs:
-  - content/roles/README.md
-  - content/roles/_template.md
-  - content/responsibilities/README.md
-  - content/responsibilities/_template.md
-  - content/context/conventions/documentation.md
-  - content/reference/responsibilities-index.md
-  - content/reference/praxis-vocabulary.md
 ---
 
 # Audit Framework Health

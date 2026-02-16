@@ -1,10 +1,10 @@
 ---
-title: "[Role Name]"
+title: "{role_name}"
 type: role
-manager: "[email@example.com]"
-alias: "[required short name]"
+manager: "{manager_email}"
+alias: "{required_alias}"
 
-agent_description: "Use this agent to {LIST USECASES}. This agent should be invoked {EXPLAIN AUTO INVOCATION CRITERIA}."
+description: "Use this agent to {LIST USECASES}. This agent should be invoked {EXPLAIN AUTO INVOCATION CRITERIA}."
 
 constitution: true
 context:

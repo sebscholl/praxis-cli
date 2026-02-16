@@ -173,12 +173,18 @@ export class RoleCompiler {
    * @returns Array of body strings with frontmatter stripped
    */
   private async inlineConstitution(fm: Frontmatter): Promise<string[]> {
+    const raw = fm.parse()["constitution"];
     const expanded = await this.resolveConstitutionPatterns(fm);
+
+    if (raw === true && expanded.length === 0) {
+      this.logger.warn("Constitution enabled but no files found in content/context/constitution/");
+    }
 
     return expanded
       .map((relPath) => {
         const fullPath = join(this.root, relPath);
         if (!existsSync(fullPath)) {
+          this.logger.warn(`Constitution file not found: ${relPath}`);
           return null;
         }
         return new Markdown(fullPath).body();
@@ -197,12 +203,23 @@ export class RoleCompiler {
    */
   private async inlineRefs(fm: Frontmatter, key: string): Promise<string[]> {
     const patterns = fm.array(key) as string[];
+
+    for (const pattern of patterns) {
+      if (this.globExpander.isGlob(pattern)) {
+        const matches = await this.globExpander.expand(pattern);
+        if (matches.length === 0) {
+          this.logger.warn(`Glob pattern matched zero files: ${pattern}`);
+        }
+      }
+    }
+
     const expanded = await this.globExpander.expandAll(patterns);
 
     return expanded
       .map((relPath) => {
         const fullPath = join(this.root, relPath);
         if (!existsSync(fullPath)) {
+          this.logger.warn(`Referenced file not found: ${relPath}`);
           return null;
         }
         return new Markdown(fullPath).body();
@@ -215,7 +232,7 @@ export class RoleCompiler {
    *
    * Extracts the agent name (from alias), description, and optional
    * fields (tools, model, permission mode). Returns null if no
-   * `agent_description` is provided.
+   * `description` is provided.
    */
   private buildAgentMetadata(fm: Frontmatter, roleAlias: string): AgentMetadata | null {
     const name = roleAlias
@@ -223,9 +240,9 @@ export class RoleCompiler {
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-|-$/g, "");
 
-    const description = fm.value("agent_description") as string | undefined;
+    const description = fm.value("description") as string | undefined;
     if (!description) {
-      this.logger.warn("No agent_description found in role, skipping agent metadata");
+      this.logger.warn("No description found in role, skipping agent metadata");
       return null;
     }
 

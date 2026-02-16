@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { Writable } from "node:stream";
 
@@ -93,7 +93,7 @@ describe("RoleCompiler", () => {
       expect(content).not.toMatch(/owner: test-role/);
     });
 
-    it("includes agent_description in Claude Code plugin frontmatter", async () => {
+    it("includes description in Claude Code plugin frontmatter", async () => {
       const roleFile = join(rolesDir, "test-role.md");
 
       await compiler.compile(roleFile);
@@ -102,16 +102,16 @@ describe("RoleCompiler", () => {
       expect(content).toMatch(/^description:/m);
     });
 
-    it("warns when agent_description is missing", async () => {
+    it("warns when description is missing", async () => {
       const noDesc = join(rolesDir, "no-desc.md");
       writeFileSync(noDesc, "---\nalias: NoDesc\n---\n# Test");
 
       await compiler.compile(noDesc);
 
-      expect(logOutput).toContain("No agent_description found");
+      expect(logOutput).toContain("No description found");
     });
 
-    it("does not fallback to blockquote for missing agent_description", async () => {
+    it("does not fallback to blockquote for missing description", async () => {
       const withBlockquote = join(rolesDir, "blockquote.md");
       writeFileSync(withBlockquote, "---\nalias: Block\n---\n> Blockquote text");
 
@@ -209,6 +209,47 @@ describe("RoleCompiler", () => {
       // Profile exists, plugin output does not
       expect(existsSync(join(agentProfilesDir, "tester.md"))).toBe(true);
       expect(existsSync(join(agentsOutputDir, "tester.md"))).toBe(false);
+    });
+  });
+
+  describe("missing ref warnings", () => {
+    it("warns when a referenced file does not exist", async () => {
+      const roleFile = join(rolesDir, "bad-ref.md");
+      writeFileSync(
+        roleFile,
+        "---\nalias: BadRef\ndescription: test\nrefs:\n  - content/reference/nonexistent.md\n---\n# Bad Ref",
+      );
+
+      await compiler.compile(roleFile);
+
+      expect(logOutput).toContain("Referenced file not found: content/reference/nonexistent.md");
+    });
+
+    it("warns when a glob pattern matches zero files", async () => {
+      const roleFile = join(rolesDir, "bad-glob.md");
+      writeFileSync(
+        roleFile,
+        "---\nalias: BadGlob\ndescription: test\nrefs:\n  - content/reference/nope-*.md\n---\n# Bad Glob",
+      );
+
+      await compiler.compile(roleFile);
+
+      expect(logOutput).toContain("Glob pattern matched zero files: content/reference/nope-*.md");
+    });
+
+    it("warns when constitution enabled but no files found", async () => {
+      // Remove all constitution files
+      rmSync(join(tmpdir, "content", "context", "constitution"), { recursive: true, force: true });
+
+      const roleFile = join(rolesDir, "no-const.md");
+      writeFileSync(
+        roleFile,
+        "---\nalias: NoConst\ndescription: test\nconstitution: true\n---\n# No Constitution",
+      );
+
+      await compiler.compile(roleFile);
+
+      expect(logOutput).toContain("Constitution enabled but no files found");
     });
   });
 });

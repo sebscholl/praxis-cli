@@ -1,9 +1,8 @@
 ---
-title: "[Verb What]"
+title: "{verb_what_title}"
 type: responsibility
-owner: owner-role(s)
-refs:
-  - content/reference/[relevant-reference].md
+owner: "{owner_role_alias}"
+schedule: "{optional_schedule}"
 ---
 
 # [Verb What]

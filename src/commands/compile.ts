@@ -1,12 +1,13 @@
+import { watch, type FSWatcher } from "node:fs";
+
 import type { Command } from "commander";
+import fg from "fast-glob";
 
 import { Frontmatter } from "@/compiler/frontmatter.js";
 import { RoleCompiler } from "@/compiler/role-compiler.js";
 import { PraxisConfig } from "@/core/config.js";
 import { Logger } from "@/core/logger.js";
 import { Paths } from "@/core/paths.js";
-
-import fg from "fast-glob";
 
 /**
  * Registers the `praxis compile` command.
@@ -19,7 +20,8 @@ export function registerCompileCommand(program: Command): void {
     .command("compile")
     .description("Compile role definitions into agent files")
     .option("--alias <name>", "compile a specific agent by alias")
-    .action(async (options: { alias?: string }) => {
+    .option("--watch", "watch content/ for changes and recompile")
+    .action(async (options: { alias?: string; watch?: boolean }) => {
       const logger = new Logger();
 
       try {
@@ -29,14 +31,61 @@ export function registerCompileCommand(program: Command): void {
 
         if (options.alias) {
           await compileOne(paths, compiler, logger, options.alias);
-        } else {
-          await compiler.compileAll();
+          if (options.watch) {
+            logger.warn("--watch is not supported with --alias, ignoring");
+          }
+          return;
+        }
+
+        await compiler.compileAll();
+
+        if (options.watch) {
+          watchAndRecompile(paths, compiler, logger);
         }
       } catch (err) {
         logger.error(err instanceof Error ? err.message : String(err));
         process.exit(1);
       }
     });
+}
+
+/**
+ * Watches the content directory and recompiles on changes.
+ *
+ * Uses `fs.watch` with recursive mode to detect file changes.
+ * Debounces rapid changes to avoid redundant compilations.
+ *
+ * @param paths - Paths instance for the project
+ * @param compiler - RoleCompiler instance
+ * @param logger - Logger instance
+ * @param options - Configuration overrides (debounce timing)
+ * @returns The FSWatcher instance (for cleanup in tests)
+ */
+export function watchAndRecompile(
+  paths: Paths,
+  compiler: RoleCompiler,
+  logger: Logger,
+  options?: { debounceMs?: number },
+): FSWatcher {
+  const debounceMs = options?.debounceMs ?? 300;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+
+  logger.info(`Watching ${paths.contentDir} for changes...`);
+
+  const watcher = watch(paths.contentDir, { recursive: true }, (_event, filename) => {
+    if (timer) clearTimeout(timer);
+
+    timer = setTimeout(async () => {
+      try {
+        logger.info(`Change detected${filename ? `: ${String(filename)}` : ""}, recompiling...`);
+        await compiler.compileAll();
+      } catch (err) {
+        logger.error(err instanceof Error ? err.message : String(err));
+      }
+    }, debounceMs);
+  });
+
+  return watcher;
 }
 
 /**

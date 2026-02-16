@@ -24,6 +24,5 @@ Reference contains static, factual information that contributors look up as need
 ---
 title: Reference Title
 type: reference
-refs: []
 ---
 ```

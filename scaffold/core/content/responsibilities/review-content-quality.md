@@ -1,10 +1,8 @@
 ---
 title: Review Content Quality
 type: responsibility
-owner: praxis-steward
+owner: stewart
 schedule: triggered
-refs:
-  - content/context/conventions/documentation.md
 ---
 
 # Review Content Quality

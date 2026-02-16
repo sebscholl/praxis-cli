@@ -121,7 +121,6 @@ describe("initProject", () => {
 
     expect(existsSync(join(dir, ".claude-plugin", "marketplace.json"))).toBe(true);
     expect(existsSync(join(dir, "plugins", "praxis", ".claude-plugin", "plugin.json"))).toBe(true);
-    expect(existsSync(join(dir, "plugins", "praxis", "commands", "huddle.md"))).toBe(true);
   });
 
   it("skips files that already exist", () => {
@@ -210,7 +209,6 @@ describe("initProject", () => {
 
     const expectedDirs = [
       "plugins/praxis/.claude-plugin",
-      "plugins/praxis/commands",
       ".claude-plugin",
     ];
 

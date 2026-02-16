@@ -1,12 +1,8 @@
 ---
 title: Guide Content Placement
 type: responsibility
-owner: praxis-steward
+owner: stewart
 schedule: triggered
-refs:
-  - content/context/conventions/documentation.md
-  - content/reference/praxis-vocabulary.md
-  - content/reference/responsibilities-index.md
 ---
 
 # Guide Content Placement

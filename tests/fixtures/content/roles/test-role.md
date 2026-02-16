@@ -2,7 +2,7 @@
 title: Test Role
 type: role
 alias: Tester
-agent_description: "A test role for unit testing"
+description: "A test role for unit testing"
 manager: test@example.com
 last_updated: 2024-12-30
 

@@ -1,14 +1,8 @@
 ---
 title: Challenge Contributor Design
 type: responsibility
-owner: praxis-recruiter
+owner: remy
 schedule: triggered
-refs:
-  - content/reference/praxis-vocabulary.md
-  - content/reference/responsibilities-index.md
-  - content/roles/_template.md
-  - content/responsibilities/_template.md
-  - content/context/conventions/documentation.md
 ---
 
 # Challenge Contributor Design

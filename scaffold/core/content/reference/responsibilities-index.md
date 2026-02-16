@@ -1,7 +1,6 @@
 ---
 title: Responsibilities Index
 type: reference
-refs: []
 ---
 
 # Responsibilities Index

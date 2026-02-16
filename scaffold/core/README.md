@@ -29,11 +29,8 @@ praxis/
 │   ├── roles/               # Role definitions
 │   ├── responsibilities/    # Delegatable work
 │   └── reference/           # Definitions, templates, indices
-├── plugins/
-│   └── praxis/
-│       ├── agents/          # Compiled agent files (auto-generated)
-│       └── commands/        # Plugin commands
-└── .claude-plugin/          # Claude Code marketplace
+├── agent-profiles/          # Compiled agent profiles (auto-generated)
+└── praxis.config.json       # Compilation config
 ```
 
 ---

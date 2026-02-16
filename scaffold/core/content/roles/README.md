@@ -32,26 +32,6 @@ The role file is the **entry point** for onboarding an agent. Its frontmatter is
 | `responsibilities` | What this role owns | 2 (With role) |
 | `refs` | Supporting references | 3 (As needed) |
 
-## Role Document Structure
-
-```yaml
----
-title: Role Name
-type: role
-manager: email@example.com
-alias: ShortName
-agent_description: "Description of when to invoke this agent"
-
-constitution: true
-context:
-  - content/context/conventions/relevant-convention.md
-responsibilities:
-  - content/responsibilities/verb-noun.md
-refs:
-  - content/reference/relevant-reference.md
----
-```
-
 **Note:** `constitution: true` automatically loads all files from `content/context/constitution/*.md`.
 
 ### Sections
@@ -61,6 +41,58 @@ refs:
 3. **Authorities**: What decisions this role can make autonomously
 4. **Interfaces**: How this role interacts with other roles
 
-## Example
+## Template
 
-See [_template.md](./_template.md) for a starter template.
+```md
+---
+title: "{role_name}"
+type: role
+manager: "{manager_email}"
+alias: "{required_alias}"
+
+description: "Use this agent to {LIST USECASES}. This agent should be invoked {EXPLAIN AUTO INVOCATION CRITERIA}."
+
+constitution: true
+context:
+  - content/context/[relevant-context-file].md
+
+responsibilities:
+  - content/responsibilities/[verb]-[noun].md
+
+refs:
+  - content/reference/[relevant-reference].md
+---
+
+# [Role Name] (a.k.a **[Alias]**)
+
+Concise description of what this role does.
+
+## Identity
+
+What this role is and why it exists. What value does it provide to the organization?
+
+## Scope
+
+### Responsible For
+
+- Thing this role owns
+- Another thing this role owns
+
+### Not Responsible For
+
+- Thing that might be confused as part of this role but isn't
+- Boundary clarification
+
+## Authorities
+
+- **Can** approve X up to Y threshold
+- **Can** make decisions about Z
+- **Cannot** commit to A without approval from B
+
+## Interfaces
+
+| With | Interaction |
+|------|-------------|
+| [Other Role] | Receives X, provides Y |
+| [Another Role] | Collaborates on Z |
+```

@@ -54,7 +54,7 @@ export class GlobExpander {
   }
 
   /** Checks whether a pattern contains glob wildcard characters. */
-  private isGlob(pattern: string): boolean {
+  isGlob(pattern: string): boolean {
     return pattern.includes("*") || pattern.includes("?") || pattern.includes("[");
   }
 
