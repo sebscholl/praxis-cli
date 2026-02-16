@@ -1,0 +1,23 @@
+---
+title: Sample Role
+type: role
+alias: Sample
+manager: test@example.com
+last_updated: 2024-12-30
+
+constitution: true
+context:
+  - content/context/conventions/documentation.md
+responsibilities:
+  - content/responsibilities/sample-responsibility.md
+refs:
+  - content/reference/vocabulary.md
+---
+
+# Sample Role
+
+This is the sample role body content.
+
+## Identity
+
+A sample role for testing.

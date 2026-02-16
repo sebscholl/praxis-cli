@@ -1,0 +1,150 @@
+import { join } from "node:path";
+
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { http, HttpResponse } from "msw";
+import { setupServer } from "msw/node";
+
+import { BatchValidator, DOCUMENT_TYPES } from "@/validator/batch-validator.js";
+import { CacheManager } from "@/validator/cache-manager.js";
+
+import { createCompilerTmpdir } from "../helpers/compiler-tmpdir.js";
+
+/** MSW server for intercepting OpenRouter API calls. */
+const server = setupServer();
+
+beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
+afterEach(() => server.resetHandlers());
+afterAll(() => server.close());
+
+/** Configures MSW to return a compliant response for all validation requests. */
+function useCompliantFixture(): void {
+  server.use(
+    http.post("https://openrouter.ai/api/v1/chat/completions", () => {
+      return HttpResponse.json({
+        choices: [
+          {
+            message: { content: "Yes — fully compliant." },
+          },
+        ],
+      });
+    }),
+  );
+}
+
+/** Configures MSW to return an error response for all validation requests. */
+function useErrorFixture(): void {
+  server.use(
+    http.post("https://openrouter.ai/api/v1/chat/completions", () => {
+      return HttpResponse.json({
+        choices: [
+          {
+            message: {
+              content: "No — major issues:\n- Missing required field\n- Wrong structure",
+            },
+          },
+        ],
+      });
+    }),
+  );
+}
+
+describe("BatchValidator", () => {
+  let tmpdir: string;
+  let cleanup: () => void;
+
+  beforeAll(() => {
+    const ctx = createCompilerTmpdir();
+    tmpdir = ctx.tmpdir;
+    cleanup = ctx.cleanup;
+    process.env["OPENROUTER_API_KEY"] = "test-key";
+  });
+
+  afterAll(() => {
+    cleanup();
+    delete process.env["OPENROUTER_API_KEY"];
+  });
+
+  describe("DOCUMENT_TYPES", () => {
+    it("includes all expected document types", () => {
+      expect(Object.keys(DOCUMENT_TYPES)).toEqual([
+        "roles",
+        "responsibilities",
+        "reference",
+        "conventions",
+        "constitution",
+      ]);
+    });
+  });
+
+  describe("validateAll()", () => {
+    it("validates documents across all types", async () => {
+      useCompliantFixture();
+      const contentDir = join(tmpdir, "content");
+      const cacheManager = new CacheManager(join(tmpdir, ".praxis", "cache", "validation"));
+
+      const batch = new BatchValidator({
+        contentDir,
+        useCache: false,
+        cacheManager,
+      });
+
+      const results = await batch.validateAll();
+
+      expect(results.length).toBeGreaterThan(0);
+      expect(results.every((r) => r.compliant)).toBe(true);
+    });
+  });
+
+  describe("validateType()", () => {
+    it("validates only documents of the specified type", async () => {
+      useCompliantFixture();
+      const contentDir = join(tmpdir, "content");
+
+      const batch = new BatchValidator({ contentDir, useCache: false });
+      const results = await batch.validateType("roles");
+
+      expect(results.length).toBeGreaterThan(0);
+      expect(results.every((r) => r.type === "roles")).toBe(true);
+    });
+
+    it("throws for unknown document type", async () => {
+      const contentDir = join(tmpdir, "content");
+      const batch = new BatchValidator({ contentDir, useCache: false });
+
+      await expect(batch.validateType("bogus")).rejects.toThrow("Unknown document type: bogus");
+    });
+  });
+
+  describe("fail-fast", () => {
+    it("stops on first error when fail-fast is enabled", async () => {
+      useErrorFixture();
+      const contentDir = join(tmpdir, "content");
+
+      const batch = new BatchValidator({
+        contentDir,
+        failFast: true,
+        useCache: false,
+      });
+
+      await batch.validateAll();
+
+      expect(batch.stopped).toBe(true);
+    });
+  });
+
+  describe("summary()", () => {
+    it("aggregates results correctly", async () => {
+      useCompliantFixture();
+      const contentDir = join(tmpdir, "content");
+
+      const batch = new BatchValidator({ contentDir, useCache: false });
+      await batch.validateAll();
+      const summary = batch.summary();
+
+      expect(summary.total).toBeGreaterThan(0);
+      expect(summary.compliant).toBe(summary.total);
+      expect(summary.errors).toBe(0);
+      expect(summary.warnings).toBe(0);
+    });
+  });
+});
