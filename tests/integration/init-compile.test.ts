@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
@@ -27,11 +27,8 @@ describe("init → compile integration", () => {
   beforeAll(async () => {
     dir = join(tmpdir(), `praxis-integration-${randomUUID()}`);
 
-    // Scaffold the project
+    // Scaffold the project (creates content/ which Paths uses for root detection)
     initProject(dir, logger, SCAFFOLD_DIR);
-
-    // Create .git so Paths can find the project root
-    mkdirSync(join(dir, ".git"), { recursive: true });
 
     // Compile all roles
     const compiler = new RoleCompiler({ root: dir, logger });

@@ -4,9 +4,9 @@ import { dirname, join, resolve } from "node:path";
 /**
  * Resolves standard directory paths within a Praxis project.
  *
- * Finds the project root by walking up the filesystem until a `.git`
- * directory is found, then derives all standard content and output paths
- * relative to that root.
+ * Finds the project root by walking up the filesystem until a `content/`
+ * directory is found (the defining marker of a Praxis project), then
+ * derives all standard content and output paths relative to that root.
  */
 export class Paths {
   private readonly startDir: string;
@@ -16,7 +16,7 @@ export class Paths {
     this.startDir = startDir;
   }
 
-  /** The project root directory (parent of `.git`). */
+  /** The project root directory (parent of `content/`). */
   get root(): string {
     if (!this.cachedRoot) {
       this.cachedRoot = this.findRoot();
@@ -62,21 +62,21 @@ export class Paths {
   }
 
   /**
-   * Walks up from startDir to find the nearest `.git` directory.
+   * Walks up from startDir to find the nearest `content/` directory.
    *
-   * @throws Error if no `.git` directory is found before reaching filesystem root
+   * @throws Error if no `content/` directory is found before reaching filesystem root
    */
   private findRoot(): string {
     let current = resolve(this.startDir);
 
     for (;;) {
-      if (existsSync(join(current, ".git"))) {
+      if (existsSync(join(current, "content"))) {
         return current;
       }
 
       const parent = dirname(current);
       if (parent === current) {
-        throw new Error("Could not find praxis root (no .git directory found)");
+        throw new Error("Could not find Praxis root (no content/ directory found)");
       }
 
       current = parent;
