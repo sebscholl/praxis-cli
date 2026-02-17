@@ -1,0 +1,67 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Build & Development Commands
+
+```bash
+npm run build          # tsup → dist/index.js (ESM, Node 18+, shebang-enabled)
+npm run dev            # tsup in watch mode
+npm test               # vitest run (all tests)
+npm run test:watch     # vitest watch mode
+npm test -- tests/validator/cache-manager.test.ts  # run single test file
+npm run lint           # eslint src/ tests/
+npm run typecheck      # tsc --noEmit
+npm run format         # prettier --write
+npm publish --access public  # prepublishOnly runs: lint → typecheck → test → build
+```
+
+## Architecture
+
+Praxis CLI compiles human-authored knowledge documents (roles, responsibilities, context) into self-contained agent profiles. The system has two main pipelines:
+
+### Compiler Pipeline
+
+```
+Role .md file (with YAML frontmatter)
+  → Frontmatter parsed (src/compiler/frontmatter.ts)
+  → Referenced content resolved via globs (src/compiler/glob-expander.ts)
+  → Sections assembled: Role → Responsibilities → Constitution → Context → Reference
+      (src/compiler/output-builder.ts)
+  → Pure profile written to agentProfilesDir/{alias}.md
+  → Each plugin receives profile + metadata and writes its own output
+      (src/compiler/plugin-registry.ts → plugins/*)
+```
+
+The **Claude Code plugin** (`src/compiler/plugins/claude-code.ts`) wraps the profile with YAML frontmatter (name, description, tools, model, permissionMode) and writes to `plugins/praxis/agents/{alias}.md`.
+
+### Validator Pipeline
+
+```
+Document .md + directory README.md (spec)
+  → Content hash computed (SHA256, 8-char prefix)
+  → Cache checked: .praxis/cache/validation/{type}/{name}.json
+  → On miss: LLM call via OpenRouter API (OPENROUTER_API_KEY env var)
+  → Response parsed (Yes/Maybe/No + issues)
+  → Result cached with content_hash for invalidation
+```
+
+Key files: `src/validator/document-validator.ts`, `src/validator/cache-manager.ts`, `src/validator/batch-validator.ts`.
+
+### Project Root Detection
+
+`src/core/paths.ts` walks up from cwd until it finds a `content/` directory. All paths resolve relative to this root. Config loads from `praxis.config.json` at root.
+
+### Plugin System
+
+Plugins implement `CompilerPlugin` interface (`src/compiler/plugins/types.ts`): `name` property and `compile(profileContent, metadata, roleAlias)` method. Registered in `src/compiler/plugin-registry.ts`. Enabled via `plugins` array in `praxis.config.json`.
+
+## Code Conventions
+
+- **Path alias:** `@/*` → `./src/*` (configured in tsconfig.json and vitest.config.ts)
+- **Import extensions:** `.js` required for local imports (ESM)
+- **Unused args:** Prefix with `_` (eslint rule)
+- **Formatting:** Double quotes, semicolons, trailing commas, 100-char line width
+- **Test location:** `tests/` mirrors `src/` structure, uses `.test.ts` suffix
+- **Excluded from compilation:** Files named `_template.md` or `README.md`
+- **Logging:** Logger class writes to stderr (keeps stdout clean for piping)
