@@ -1,4 +1,5 @@
 import { watch, type FSWatcher } from "node:fs";
+import { resolve } from "node:path";
 
 import type { Command } from "commander";
 import fg from "fast-glob";
@@ -13,14 +14,14 @@ import { Paths } from "@/core/paths.js";
  * Registers the `praxis compile` command.
  *
  * Compiles role definitions into agent profile files and runs
- * any enabled plugins (e.g. Claude Code) based on praxis.config.json.
+ * any enabled plugins (e.g. Claude Code) based on .praxis/config.json.
  */
 export function registerCompileCommand(program: Command): void {
   program
     .command("compile")
     .description("Compile role definitions into agent files")
     .option("--alias <name>", "compile a specific agent by alias")
-    .option("--watch", "watch content/ for changes and recompile")
+    .option("--watch", "watch source directories for changes and recompile")
     .action(async (options: { alias?: string; watch?: boolean }) => {
       const logger = new Logger();
 
@@ -30,7 +31,7 @@ export function registerCompileCommand(program: Command): void {
         const compiler = new RoleCompiler({ root: paths.root, logger, config });
 
         if (options.alias) {
-          await compileOne(paths, compiler, logger, options.alias);
+          await compileOne(config, compiler, logger, options.alias);
           if (options.watch) {
             logger.warn("--watch is not supported with --alias, ignoring");
           }
@@ -40,7 +41,7 @@ export function registerCompileCommand(program: Command): void {
         await compiler.compileAll();
 
         if (options.watch) {
-          watchAndRecompile(paths, compiler, logger);
+          watchAndRecompile(paths.root, config, compiler, logger);
         }
       } catch (err) {
         logger.error(err instanceof Error ? err.message : String(err));
@@ -50,42 +51,53 @@ export function registerCompileCommand(program: Command): void {
 }
 
 /**
- * Watches the content directory and recompiles on changes.
+ * Watches source directories and recompiles on changes.
  *
  * Uses `fs.watch` with recursive mode to detect file changes.
  * Debounces rapid changes to avoid redundant compilations.
  *
- * @param paths - Paths instance for the project
+ * @param root - Project root directory
+ * @param config - PraxisConfig instance
  * @param compiler - RoleCompiler instance
  * @param logger - Logger instance
  * @param options - Configuration overrides (debounce timing)
- * @returns The FSWatcher instance (for cleanup in tests)
+ * @returns Array of FSWatcher instances (one per source directory)
  */
 export function watchAndRecompile(
-  paths: Paths,
+  root: string,
+  config: PraxisConfig,
   compiler: RoleCompiler,
   logger: Logger,
   options?: { debounceMs?: number },
-): FSWatcher {
+): FSWatcher[] {
   const debounceMs = options?.debounceMs ?? 300;
   let timer: ReturnType<typeof setTimeout> | null = null;
 
-  logger.info(`Watching ${paths.contentDir} for changes...`);
+  const watchers: FSWatcher[] = [];
 
-  const watcher = watch(paths.contentDir, { recursive: true }, (_event, filename) => {
-    if (timer) clearTimeout(timer);
+  for (const source of config.sources) {
+    const sourceDir = resolve(root, source);
+    logger.info(`Watching ${sourceDir} for changes...`);
 
-    timer = setTimeout(async () => {
-      try {
-        logger.info(`Change detected${filename ? `: ${String(filename)}` : ""}, recompiling...`);
-        await compiler.compileAll();
-      } catch (err) {
-        logger.error(err instanceof Error ? err.message : String(err));
-      }
-    }, debounceMs);
-  });
+    const watcher = watch(sourceDir, { recursive: true }, (_event, filename) => {
+      if (timer) clearTimeout(timer);
 
-  return watcher;
+      timer = setTimeout(async () => {
+        try {
+          logger.info(
+            `Change detected${filename ? `: ${String(filename)}` : ""}, recompiling...`,
+          );
+          await compiler.compileAll();
+        } catch (err) {
+          logger.error(err instanceof Error ? err.message : String(err));
+        }
+      }, debounceMs);
+    });
+
+    watchers.push(watcher);
+  }
+
+  return watchers;
 }
 
 /**
@@ -95,12 +107,12 @@ export function watchAndRecompile(
  * `alias` frontmatter field matches the target (case-insensitive).
  */
 async function compileOne(
-  paths: Paths,
+  config: PraxisConfig,
   compiler: RoleCompiler,
   logger: Logger,
   aliasName: string,
 ): Promise<void> {
-  const roleFile = await findRoleByAlias(paths.rolesDir, aliasName);
+  const roleFile = await findRoleByAlias(config.rolesDir, aliasName);
 
   if (!roleFile) {
     logger.error(`No role found with alias: ${aliasName}`);

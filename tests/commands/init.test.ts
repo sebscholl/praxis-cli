@@ -81,18 +81,20 @@ describe("initProject", () => {
     }
   });
 
-  it("scaffolds praxis.config.json", () => {
+  it("scaffolds .praxis/config.json", () => {
     const dir = makeTmpdir();
     dirs.push(dir);
 
     initProject(dir, logger, SCAFFOLD_DIR);
 
-    const configPath = join(dir, "praxis.config.json");
+    const configPath = join(dir, ".praxis", "config.json");
     expect(existsSync(configPath)).toBe(true);
 
     const config = JSON.parse(readFileSync(configPath, "utf-8"));
-    expect(config.agentProfilesDir).toBe("./agent-profiles");
+    expect(config.agentProfilesOutputDir).toBe("./agent-profiles");
     expect(config.plugins).toEqual([]);
+    expect(config.sources).toEqual(["roles", "responsibilities", "reference", "context"]);
+    expect(config.rolesDir).toBe("roles");
   });
 
   it("does not scaffold Claude Code files by default", () => {
@@ -111,10 +113,10 @@ describe("initProject", () => {
     dirs.push(dir);
 
     // Pre-create config with claude-code plugin enabled
-    mkdirSync(dir, { recursive: true });
+    mkdirSync(join(dir, ".praxis"), { recursive: true });
     writeFileSync(
-      join(dir, "praxis.config.json"),
-      JSON.stringify({ agentProfilesDir: "./agent-profiles", plugins: ["claude-code"] }),
+      join(dir, ".praxis", "config.json"),
+      JSON.stringify({ agentProfilesOutputDir: "./agent-profiles", plugins: ["claude-code"] }),
     );
 
     initProject(dir, logger, SCAFFOLD_DIR);
@@ -167,7 +169,7 @@ describe("initProject", () => {
     initProject(dir, logger, SCAFFOLD_DIR);
 
     // Scaffold files exist
-    expect(existsSync(join(dir, "content", "roles", "README.md"))).toBe(true);
+    expect(existsSync(join(dir, "roles", "README.md"))).toBe(true);
 
     // Unrelated files preserved
     expect(readFileSync(join(dir, "src", "app.ts"), "utf-8")).toBe("console.log('hello');\n");
@@ -181,12 +183,12 @@ describe("initProject", () => {
     initProject(dir, logger, SCAFFOLD_DIR);
 
     const expectedDirs = [
-      "content/context/constitution",
-      "content/context/conventions",
-      "content/context/lenses",
-      "content/roles",
-      "content/responsibilities",
-      "content/reference",
+      "context/constitution",
+      "context/conventions",
+      "context/lenses",
+      "roles",
+      "responsibilities",
+      "reference",
     ];
 
     for (const expected of expectedDirs) {
@@ -199,9 +201,9 @@ describe("initProject", () => {
     dirs.push(dir);
 
     // Pre-create config with claude-code enabled
-    mkdirSync(dir, { recursive: true });
+    mkdirSync(join(dir, ".praxis"), { recursive: true });
     writeFileSync(
-      join(dir, "praxis.config.json"),
+      join(dir, ".praxis", "config.json"),
       JSON.stringify({ plugins: ["claude-code"] }),
     );
 

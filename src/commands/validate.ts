@@ -2,9 +2,14 @@ import type { Command } from "commander";
 
 import chalk from "chalk";
 
+import { PraxisConfig } from "@/core/config.js";
 import { Logger } from "@/core/logger.js";
 import { Paths } from "@/core/paths.js";
-import { BatchValidator, type BatchValidationResult, type ValidationSummary } from "@/validator/batch-validator.js";
+import {
+  BatchValidator,
+  type BatchValidationResult,
+  type ValidationSummary,
+} from "@/validator/batch-validator.js";
 import { CacheManager } from "@/validator/cache-manager.js";
 import { DocumentValidator } from "@/validator/document-validator.js";
 
@@ -30,8 +35,9 @@ export function registerValidateCommand(program: Command): void {
 
       try {
         checkApiKey(logger);
+        const paths = new Paths();
 
-        const cacheManager = options.cache ? new CacheManager() : undefined;
+        const cacheManager = options.cache ? new CacheManager(undefined, paths.root) : undefined;
 
         console.log(`Validating ${path}...`);
 
@@ -71,10 +77,12 @@ export function registerValidateCommand(program: Command): void {
         try {
           checkApiKey(logger);
           const paths = new Paths();
-          const cacheManager = options.cache ? new CacheManager() : undefined;
+          const config = new PraxisConfig(paths.root);
+          const cacheManager = options.cache ? new CacheManager(undefined, paths.root) : undefined;
 
           const batch = new BatchValidator({
-            contentDir: paths.contentDir,
+            root: paths.root,
+            sources: config.sources,
             failFast: options.failFast,
             useCache: options.cache,
             cacheManager,
@@ -125,8 +133,12 @@ export function registerValidateCommand(program: Command): void {
       try {
         checkApiKey(logger);
         const paths = new Paths();
+        const config = new PraxisConfig(paths.root);
 
-        const batch = new BatchValidator({ contentDir: paths.contentDir });
+        const batch = new BatchValidator({
+          root: paths.root,
+          sources: config.sources,
+        });
 
         console.log("Running CI validation...");
         await batch.validateAll();

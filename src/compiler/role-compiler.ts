@@ -5,7 +5,6 @@ import fg from "fast-glob";
 
 import { PraxisConfig } from "@/core/config.js";
 import { Logger } from "@/core/logger.js";
-import { Paths } from "@/core/paths.js";
 
 import { Frontmatter } from "./frontmatter.js";
 import { GlobExpander } from "./glob-expander.js";
@@ -77,10 +76,8 @@ export class RoleCompiler {
    * @returns Summary with the count of compiled agents
    */
   async compileAll(): Promise<{ compiled: number }> {
-    const paths = new Paths(this.root);
-
     const roleFiles = await fg("*.md", {
-      cwd: paths.rolesDir,
+      cwd: this.config.rolesDir,
       onlyFiles: true,
       absolute: true,
     });
@@ -139,7 +136,7 @@ export class RoleCompiler {
    */
   private writeOutputs(profile: string, metadata: AgentMetadata | null, roleAlias: string): void {
     // Write pure agent profile if configured
-    const profilesDir = this.config.agentProfilesDir;
+    const profilesDir = this.config.agentProfilesOutputDir;
     if (profilesDir) {
       if (!existsSync(profilesDir)) {
         mkdirSync(profilesDir, { recursive: true });
@@ -148,23 +145,40 @@ export class RoleCompiler {
     }
 
     // Run each enabled plugin
-    const plugins = resolvePlugins(this.config.plugins, this.root, this.logger);
+    const plugins = resolvePlugins(
+      this.config.plugins,
+      this.root,
+      this.logger,
+      this.config.pluginsOutputDir,
+    );
     for (const plugin of plugins) {
       plugin.compile(profile, metadata, roleAlias);
     }
   }
 
   /**
-   * Resolves `constitution: true` to glob patterns matching all constitution files.
+   * Resolves constitution frontmatter to glob patterns.
    *
-   * @returns Array of relative paths to constitution files, or empty if not enabled
+   * Supports:
+   * - `constitution: true` (deprecated, warns and returns empty)
+   * - `constitution: "context/constitution/*.md"` (string glob pattern)
+   * - `constitution: ["context/constitution/*.md"]` (array of patterns)
+   *
+   * @returns Array of relative paths to constitution files
    */
   private async resolveConstitutionPatterns(fm: Frontmatter): Promise<string[]> {
     const raw = fm.parse()["constitution"];
-    if (raw !== true) {
+    if (!raw) {
       return [];
     }
-    return this.globExpander.expand("content/context/constitution/*.md");
+    if (raw === true) {
+      this.logger.warn(
+        "constitution: true is deprecated. Use an explicit path like: constitution: \"context/constitution/*.md\"",
+      );
+      return [];
+    }
+    const patterns = Array.isArray(raw) ? (raw as string[]) : [raw as string];
+    return this.globExpander.expandAll(patterns);
   }
 
   /**
@@ -176,8 +190,8 @@ export class RoleCompiler {
     const raw = fm.parse()["constitution"];
     const expanded = await this.resolveConstitutionPatterns(fm);
 
-    if (raw === true && expanded.length === 0) {
-      this.logger.warn("Constitution enabled but no files found in content/context/constitution/");
+    if (raw && raw !== true && expanded.length === 0) {
+      this.logger.warn("Constitution patterns matched zero files");
     }
 
     return expanded

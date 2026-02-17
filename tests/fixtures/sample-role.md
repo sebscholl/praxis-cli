@@ -5,7 +5,8 @@ alias: Sample
 manager: test@example.com
 last_updated: 2024-12-30
 
-constitution: true
+constitution:
+  - content/context/constitution/*.md
 context:
   - content/context/conventions/documentation.md
 responsibilities:

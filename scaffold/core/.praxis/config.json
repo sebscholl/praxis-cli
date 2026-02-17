@@ -1,0 +1,8 @@
+{
+  "sources": ["roles", "responsibilities", "reference", "context"],
+  "rolesDir": "roles",
+  "responsibilitiesDir": "responsibilities",
+  "agentProfilesOutputDir": "./agent-profiles",
+  "pluginsOutputDir": "./plugins",
+  "plugins": []
+}

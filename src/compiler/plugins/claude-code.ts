@@ -13,19 +13,21 @@ import type { CompilerPlugin, PluginOptions } from "./types.js";
 export class ClaudeCodePlugin implements CompilerPlugin {
   readonly name = "claude-code";
 
-  private readonly root: string;
+  private readonly outputDir: string;
 
-  constructor({ root }: PluginOptions) {
-    this.root = root;
+  constructor({ root, pluginsOutputDir }: PluginOptions) {
+    this.outputDir = pluginsOutputDir
+      ? join(pluginsOutputDir, "praxis", "agents")
+      : join(root, "plugins", "praxis", "agents");
   }
 
   /**
    * Writes a Claude Code agent file with frontmatter.
    *
-   * Output goes to `plugins/praxis/agents/{alias}.md`.
+   * Output goes to the configured plugins output directory.
    */
   compile(profileContent: string, metadata: AgentMetadata | null, roleAlias: string): void {
-    const outputDir = join(this.root, "plugins", "praxis", "agents");
+    const outputDir = this.outputDir;
     if (!existsSync(outputDir)) {
       mkdirSync(outputDir, { recursive: true });
     }

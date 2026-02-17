@@ -44,10 +44,10 @@ describe("Frontmatter", () => {
   });
 
   describe("array()", () => {
-    it("returns boolean for constitution: true", () => {
+    it("returns array for constitution glob patterns", () => {
       const fm = new Frontmatter(join(FIXTURES_DIR, "sample-role.md"));
 
-      expect(fm.parse()["constitution"]).toBe(true);
+      expect(fm.parse()["constitution"]).toEqual(["content/context/constitution/*.md"]);
     });
 
     it("returns array values for context", () => {

@@ -26,4 +26,5 @@ export interface CompilerPlugin {
 export interface PluginOptions {
   root: string;
   logger: Logger;
+  pluginsOutputDir?: string;
 }

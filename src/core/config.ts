@@ -1,20 +1,28 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
-const CONFIG_FILE = "praxis.config.json";
+const CONFIG_FILE = join(".praxis", "config.json");
 
 interface RawConfig {
-  agentProfilesDir?: string | false;
+  agentProfilesOutputDir?: string | false;
   plugins?: string[];
+  sources?: string[];
+  rolesDir?: string;
+  responsibilitiesDir?: string;
+  pluginsOutputDir?: string;
 }
 
 const DEFAULT_CONFIG: Required<RawConfig> = {
-  agentProfilesDir: "./agent-profiles",
+  agentProfilesOutputDir: "./agent-profiles",
   plugins: [],
+  sources: ["roles", "responsibilities", "reference", "context"],
+  rolesDir: "roles",
+  responsibilitiesDir: "responsibilities",
+  pluginsOutputDir: "./plugins",
 };
 
 /**
- * Loads and provides access to `praxis.config.json` settings.
+ * Loads and provides access to `.praxis/config.json` settings.
  *
  * Falls back to defaults when no config file exists, ensuring
  * backward compatibility with projects that predate the config file.
@@ -31,11 +39,11 @@ export class PraxisConfig {
   /**
    * Absolute path for pure agent profile output, or null if disabled.
    *
-   * When `agentProfilesDir` is `false`, returns null (no profile output).
+   * When `agentProfilesOutputDir` is `false`, returns null (no profile output).
    * When it's a relative path string, resolves it against the project root.
    */
-  get agentProfilesDir(): string | null {
-    const val = this.data.agentProfilesDir;
+  get agentProfilesOutputDir(): string | null {
+    const val = this.data.agentProfilesOutputDir;
     if (val === false) {
       return null;
     }
@@ -52,6 +60,26 @@ export class PraxisConfig {
     return this.data.plugins.includes(name);
   }
 
+  /** Array of source directory paths (relative to root) for validation and watch. */
+  get sources(): string[] {
+    return this.data.sources;
+  }
+
+  /** Absolute path to the roles directory for compilation. */
+  get rolesDir(): string {
+    return resolve(this.root, this.data.rolesDir);
+  }
+
+  /** Absolute path to the responsibilities directory. */
+  get responsibilitiesDir(): string {
+    return resolve(this.root, this.data.responsibilitiesDir);
+  }
+
+  /** Absolute path to the plugins output directory. */
+  get pluginsOutputDir(): string {
+    return resolve(this.root, this.data.pluginsOutputDir);
+  }
+
   private load(): Required<RawConfig> {
     const configPath = join(this.root, CONFIG_FILE);
 
@@ -62,8 +90,12 @@ export class PraxisConfig {
     const raw = JSON.parse(readFileSync(configPath, "utf-8")) as RawConfig;
 
     return {
-      agentProfilesDir: raw.agentProfilesDir ?? DEFAULT_CONFIG.agentProfilesDir,
+      agentProfilesOutputDir: raw.agentProfilesOutputDir ?? DEFAULT_CONFIG.agentProfilesOutputDir,
       plugins: raw.plugins ?? DEFAULT_CONFIG.plugins,
+      sources: raw.sources ?? DEFAULT_CONFIG.sources,
+      rolesDir: raw.rolesDir ?? DEFAULT_CONFIG.rolesDir,
+      responsibilitiesDir: raw.responsibilitiesDir ?? DEFAULT_CONFIG.responsibilitiesDir,
+      pluginsOutputDir: raw.pluginsOutputDir ?? DEFAULT_CONFIG.pluginsOutputDir,
     };
   }
 }

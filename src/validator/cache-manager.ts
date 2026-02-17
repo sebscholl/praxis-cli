@@ -49,20 +49,32 @@ export interface OrphanedCacheFile {
  */
 export class CacheManager {
   readonly cacheRoot: string;
+  private readonly projectRoot: string | null;
 
-  constructor(cacheRoot?: string) {
+  constructor(cacheRoot?: string, projectRoot?: string) {
+    this.projectRoot = projectRoot ?? null;
     this.cacheRoot = cacheRoot ?? this.defaultCacheRoot();
   }
 
   /**
    * Computes the filesystem path for a cache entry.
    *
+   * When a projectRoot is set, strips it from absolute document paths
+   * to produce a root-relative cache path. Otherwise uses the path as-is.
+   *
    * @param documentPath - Path to the validated document
    */
   cachePathFor(documentPath: string): string {
-    const relativePath = documentPath.includes("/content/")
-      ? documentPath.split("/content/").pop()!
-      : documentPath.replace(/^content\//, "");
+    let relativePath: string;
+
+    if (this.projectRoot) {
+      const absRoot = this.projectRoot.endsWith("/") ? this.projectRoot : this.projectRoot + "/";
+      relativePath = documentPath.startsWith(absRoot)
+        ? documentPath.slice(absRoot.length)
+        : documentPath;
+    } else {
+      relativePath = documentPath;
+    }
 
     const dirPath = dirname(relativePath);
     const base = basename(relativePath, ".md");
@@ -198,9 +210,12 @@ export class CacheManager {
    *
    * A cache file is orphaned if the source document was deleted.
    * Stale hashes are no longer orphans — they get overwritten in-place.
+   *
+   * @param root - Project root directory
+   * @param sources - Array of source directory paths relative to root
    */
-  orphanedCacheFiles(contentDir: string): OrphanedCacheFile[] {
-    const validDocuments = this.buildDocumentMap(contentDir);
+  orphanedCacheFiles(root: string, sources: string[]): OrphanedCacheFile[] {
+    const validDocuments = this.buildDocumentMap(root, sources);
     const orphans: OrphanedCacheFile[] = [];
     const cacheFiles = fg.sync("**/*.json", { cwd: this.cacheRoot, absolute: true });
 
@@ -208,7 +223,7 @@ export class CacheManager {
       const docName = basename(cacheFile, ".json");
       const relativePath = cacheFile.replace(`${this.cacheRoot}/`, "");
       const type = relativePath.split("/")[0] ?? "unknown";
-      const docKey = `${type}/${docName}`;
+      const docKey = relativePath.replace(/\.json$/, "");
 
       if (!validDocuments.has(docKey)) {
         orphans.push({ file: cacheFile, reason: "document_missing", docName, type });
@@ -218,39 +233,33 @@ export class CacheManager {
     return orphans;
   }
 
-  /** Derives the default cache root from the current working directory. */
+  /** Derives the default cache root from the project root or cwd. */
   private defaultCacheRoot(): string {
-    return join(process.cwd(), ".praxis", "cache", "validation");
+    const root = this.projectRoot ?? process.cwd();
+    return join(root, ".praxis", "cache", "validation");
   }
 
   /**
    * Builds a set of valid document keys for orphan detection.
    *
-   * Used by orphan detection to check whether source documents still exist.
+   * Scans source directories for .md files and builds keys matching
+   * the cache path structure (source-relative paths without extension).
    */
-  private buildDocumentMap(contentDir: string): Set<string> {
+  private buildDocumentMap(root: string, sources: string[]): Set<string> {
     const documents = new Set<string>();
 
-    const documentTypes: Record<string, string> = {
-      roles: "roles/README.md",
-      responsibilities: "responsibilities/README.md",
-      reference: "reference/README.md",
-      "context/conventions": "context/conventions/README.md",
-      "context/constitution": "context/constitution/README.md",
-    };
+    for (const source of sources) {
+      const sourceDir = join(root, source);
+      if (!existsSync(sourceDir)) continue;
 
-    for (const [type] of Object.entries(documentTypes)) {
-      const typeDir = join(contentDir, type);
-      if (!existsSync(typeDir)) continue;
+      const docFiles = fg.sync("**/*.md", { cwd: sourceDir, absolute: false });
 
-      const docFiles = fg.sync("*.md", { cwd: typeDir, absolute: true });
+      for (const relFile of docFiles) {
+        const name = basename(relFile, ".md");
+        if (name === "README" || name.startsWith("_")) continue;
 
-      for (const docPath of docFiles) {
-        const base = basename(docPath, ".md");
-        if (base === "README" || base.startsWith("_")) continue;
-
-        const normalizedType = type.split("/").pop()!;
-        documents.add(`${normalizedType}/${base}`);
+        const key = join(source, relFile).replace(/\.md$/, "");
+        documents.add(key);
       }
     }
 

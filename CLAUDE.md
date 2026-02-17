@@ -28,7 +28,7 @@ Role .md file (with YAML frontmatter)
   → Referenced content resolved via globs (src/compiler/glob-expander.ts)
   → Sections assembled: Role → Responsibilities → Constitution → Context → Reference
       (src/compiler/output-builder.ts)
-  → Pure profile written to agentProfilesDir/{alias}.md
+  → Pure profile written to agentProfilesOutputDir/{alias}.md
   → Each plugin receives profile + metadata and writes its own output
       (src/compiler/plugin-registry.ts → plugins/*)
 ```
@@ -50,11 +50,21 @@ Key files: `src/validator/document-validator.ts`, `src/validator/cache-manager.t
 
 ### Project Root Detection
 
-`src/core/paths.ts` walks up from cwd until it finds a `content/` directory. All paths resolve relative to this root. Config loads from `praxis.config.json` at root.
+`src/core/paths.ts` walks up from cwd until it finds a `.praxis/` directory. All paths resolve relative to this root. Config loads from `.praxis/config.json`.
+
+### Configuration
+
+Config lives at `{root}/.praxis/config.json` with these fields:
+- `sources: string[]` — directories scanned for documents (default: `["roles", "responsibilities", "reference", "context"]`)
+- `rolesDir: string` — where role `.md` files live (default: `"roles"`)
+- `responsibilitiesDir: string` — where responsibility `.md` files live (default: `"responsibilities"`)
+- `agentProfilesOutputDir: string | false` — where pure profiles are written (default: `"./agent-profiles"`)
+- `pluginsOutputDir: string` — base directory for plugin output (default: `"./plugins"`)
+- `plugins: string[]` — enabled plugins (default: `[]`)
 
 ### Plugin System
 
-Plugins implement `CompilerPlugin` interface (`src/compiler/plugins/types.ts`): `name` property and `compile(profileContent, metadata, roleAlias)` method. Registered in `src/compiler/plugin-registry.ts`. Enabled via `plugins` array in `praxis.config.json`.
+Plugins implement `CompilerPlugin` interface (`src/compiler/plugins/types.ts`): `name` property and `compile(profileContent, metadata, roleAlias)` method. Registered in `src/compiler/plugin-registry.ts`. Enabled via `plugins` array in config. Each plugin organizes its output within `pluginsOutputDir` (e.g., Claude Code writes to `{pluginsOutputDir}/praxis/agents/`).
 
 ## Code Conventions
 

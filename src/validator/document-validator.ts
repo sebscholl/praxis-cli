@@ -276,7 +276,7 @@ Answer Yes, Maybe, or No with specific issues found.`;
     }
   }
 
-  /** Finds the README.md spec file in the document's directory or parent. */
+  /** Finds the README.md spec file in the document's directory. */
   private findReadme(): string {
     const baseDir = dirname(this.documentPath);
     const readme = join(baseDir, "README.md");
@@ -284,11 +284,6 @@ Answer Yes, Maybe, or No with specific issues found.`;
       return readme;
     }
 
-    const parentReadme = join(dirname(baseDir), "README.md");
-    if (existsSync(parentReadme)) {
-      return parentReadme;
-    }
-
-    throw new Error(`No README.md found for ${this.documentPath}`);
+    throw new Error(`No README.md found in ${baseDir} for ${this.documentPath}`);
   }
 }

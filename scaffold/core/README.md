@@ -20,17 +20,18 @@ The framework is built on a simple premise: **if you cannot clearly explain how 
 ## Directory Structure
 
 ```
-praxis/
-├── content/
-│   ├── context/
-│   │   ├── constitution/    # Immutable identity
-│   │   ├── conventions/     # Standards and norms
-│   │   └── lenses/          # Mental models
-│   ├── roles/               # Role definitions
-│   ├── responsibilities/    # Delegatable work
-│   └── reference/           # Definitions, templates, indices
-├── agent-profiles/          # Compiled agent profiles (auto-generated)
-└── praxis.config.json       # Compilation config
+my-org/
+├── .praxis/
+│   └── config.json            # Project configuration
+├── context/
+│   ├── constitution/           # Immutable identity
+│   ├── conventions/            # Standards and norms
+│   └── lenses/                 # Mental models
+├── roles/                      # Role definitions
+├── responsibilities/           # Delegatable work
+├── reference/                  # Definitions, templates, indices
+├── agent-profiles/             # Compiled agent profiles (auto-generated)
+└── plugins/                    # Plugin output (auto-generated)
 ```
 
 ---
@@ -39,10 +40,10 @@ praxis/
 
 | Primitive | "This is..." |
 |-----------|--------------|
-| **[Context](./content/context/)** | "This is who we are and how we think" |
-| **[Roles](./content/roles/)** | "This is who you are" |
-| **[Responsibilities](./content/responsibilities/)** | "This is what you own" |
-| **[Reference](./content/reference/)** | "This is what things mean" |
+| **[Context](./context/)** | "This is who we are and how we think" |
+| **[Roles](./roles/)** | "This is who you are" |
+| **[Responsibilities](./responsibilities/)** | "This is what you own" |
+| **[Reference](./reference/)** | "This is what things mean" |
 
 ---
 
@@ -58,6 +59,9 @@ praxis compile --alias stewart
 # Validate all documents
 praxis validate all
 
+# Show project status
+praxis status
+
 # Show version
 praxis --version
 ```
@@ -66,8 +70,8 @@ praxis --version
 
 ## Getting Started
 
-1. **Start with `content/context/constitution/`** — Write down who you are, what you value, why you exist
-2. **Add `content/context/conventions/`** — Document how you do things
-3. **Define your first Role** — Create a file in `content/roles/`
-4. **Create your first Responsibility** — Create a file in `content/responsibilities/`
-5. **Build Reference as needed** — Add definitions and catalogs to `content/reference/`
+1. **Start with `context/constitution/`** — Write down who you are, what you value, why you exist
+2. **Add `context/conventions/`** — Document how you do things
+3. **Define your first Role** — Create a file in `roles/`
+4. **Create your first Responsibility** — Create a file in `responsibilities/`
+5. **Build Reference as needed** — Add definitions and catalogs to `reference/`

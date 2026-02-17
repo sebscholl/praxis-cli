@@ -1,8 +1,9 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 
 import type { Command } from "commander";
 
+import { PraxisConfig } from "@/core/config.js";
 import { Logger } from "@/core/logger.js";
 import { Paths } from "@/core/paths.js";
 
@@ -71,15 +72,17 @@ export function addFromTemplate(
   options?: { root?: string; scaffoldDir?: string },
 ): void {
   const root = options?.root ?? new Paths().root;
+  const config = new PraxisConfig(root);
   const scaffoldDir = options?.scaffoldDir ?? SCAFFOLD_DIR;
 
   const subdir = type === "role" ? "roles" : "responsibilities";
-  const targetDir = join(root, "content", subdir);
-  const templatePath = join(scaffoldDir, "core", "content", subdir, "_template.md");
+  const targetDir = type === "role" ? config.rolesDir : config.responsibilitiesDir;
+  const templatePath = join(scaffoldDir, "core", subdir, "_template.md");
   const targetFile = join(targetDir, `${name}.md`);
+  const relTargetFile = relative(root, targetFile);
 
   if (existsSync(targetFile)) {
-    throw new Error(`File already exists: content/${subdir}/${name}.md`);
+    throw new Error(`File already exists: ${relTargetFile}`);
   }
 
   if (!existsSync(templatePath)) {
@@ -94,7 +97,7 @@ export function addFromTemplate(
   }
 
   writeFileSync(targetFile, filled);
-  logger.success(`Created ${type}: content/${subdir}/${name}.md`);
+  logger.success(`Created ${type}: ${relTargetFile}`);
 }
 
 /**
@@ -112,8 +115,8 @@ function toTitleCase(name: string): string {
 /**
  * Fills template placeholders with the provided name.
  *
- * For roles: replaces `{role_name}`, `{required_alias}`, `[Role Name]`, `[Alias]`
- * For responsibilities: replaces `{verb_what_title}`, `{owner_role_alias}`, `[Verb What]`
+ * For roles: replaces `{role_name}` (Title Case) and `{required_alias}` (kebab-case)
+ * For responsibilities: replaces `{verb_what_title}` (Title Case)
  */
 function fillTemplate(type: "role" | "responsibility", name: string, template: string): string {
   const titleCase = toTitleCase(name);
@@ -121,12 +124,8 @@ function fillTemplate(type: "role" | "responsibility", name: string, template: s
   if (type === "role") {
     return template
       .replace(/\{role_name\}/g, titleCase)
-      .replace(/\{required_alias\}/g, name)
-      .replace(/\[Role Name\]/g, titleCase)
-      .replace(/\[Alias\]/g, titleCase);
+      .replace(/\{required_alias\}/g, name);
   }
 
-  return template
-    .replace(/\{verb_what_title\}/g, titleCase)
-    .replace(/\[Verb What\]/g, titleCase);
+  return template.replace(/\{verb_what_title\}/g, titleCase);
 }

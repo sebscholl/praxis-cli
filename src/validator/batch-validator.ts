@@ -1,27 +1,9 @@
-import { basename, join } from "node:path";
+import { basename, dirname, join, relative } from "node:path";
 
 import fg from "fast-glob";
 
 import { CacheManager, type CachedValidationResult } from "./cache-manager.js";
 import { DocumentValidator } from "./document-validator.js";
-
-/** Map of document types to their specification and content glob patterns. */
-export const DOCUMENT_TYPES: Record<string, { spec: string; glob: string }> = {
-  roles: { spec: "content/roles/README.md", glob: "content/roles/*.md" },
-  responsibilities: {
-    spec: "content/responsibilities/README.md",
-    glob: "content/responsibilities/*.md",
-  },
-  reference: { spec: "content/reference/README.md", glob: "content/reference/*.md" },
-  conventions: {
-    spec: "content/context/conventions/README.md",
-    glob: "content/context/conventions/*.md",
-  },
-  constitution: {
-    spec: "content/context/constitution/README.md",
-    glob: "content/context/constitution/*.md",
-  },
-};
 
 /** Extended validation result that includes file path and type information. */
 export interface BatchValidationResult extends CachedValidationResult {
@@ -46,15 +28,24 @@ export interface ValidationSummary {
   >;
 }
 
+/** A validation domain: a directory with a README.md spec. */
+interface ValidationDomain {
+  dir: string;
+  readmePath: string;
+  type: string;
+}
+
 /**
  * Validates multiple Praxis documents and aggregates results.
  *
- * Iterates over all document types (or a specific type), validates
- * each document against its directory's README spec, and collects
- * results with optional fail-fast behavior and cache statistics.
+ * Discovers validation domains by scanning source directories for
+ * directories containing README.md files, validates each document
+ * against its directory's README spec, and collects results with
+ * optional fail-fast behavior and cache statistics.
  */
 export class BatchValidator {
-  readonly contentDir: string;
+  readonly root: string;
+  readonly sources: string[];
   readonly failFast: boolean;
   readonly cacheStats: { hits: number; misses: number };
 
@@ -64,20 +55,23 @@ export class BatchValidator {
   private stoppedEarly = false;
 
   constructor({
-    contentDir,
+    root,
+    sources,
     failFast = false,
     useCache = true,
     cacheManager,
   }: {
-    contentDir: string;
+    root: string;
+    sources: string[];
     failFast?: boolean;
     useCache?: boolean;
     cacheManager?: CacheManager;
   }) {
-    this.contentDir = contentDir;
+    this.root = root;
+    this.sources = sources;
     this.failFast = failFast;
     this.useCache = useCache;
-    this.cacheManager = cacheManager ?? (useCache ? new CacheManager() : null);
+    this.cacheManager = cacheManager ?? (useCache ? new CacheManager(undefined, root) : null);
     this.cacheStats = { hits: 0, misses: 0 };
   }
 
@@ -92,20 +86,22 @@ export class BatchValidator {
   }
 
   /**
-   * Validates all documents across every known document type.
+   * Validates all documents across all discovered validation domains.
    *
+   * Scans source directories for directories containing README.md,
+   * then validates all .md files in those directories.
    * Skips READMEs and template files. Respects fail-fast if enabled.
    */
   async validateAll(): Promise<BatchValidationResult[]> {
     this.results = [];
     this.stoppedEarly = false;
 
-    for (const [type, config] of Object.entries(DOCUMENT_TYPES)) {
+    const domains = await this.discoverValidationDomains();
+
+    for (const { dir, readmePath, type } of domains) {
       if (this.stoppedEarly) break;
 
-      const specPath = join(this.contentDir, "..", config.spec);
-      const globPattern = join(this.contentDir, "..", config.glob);
-      const docPaths = fg.sync(globPattern, { onlyFiles: true });
+      const docPaths = fg.sync("*.md", { cwd: dir, onlyFiles: true, absolute: true });
 
       for (const docPath of docPaths) {
         if (this.stoppedEarly) break;
@@ -113,7 +109,7 @@ export class BatchValidator {
         const name = basename(docPath);
         if (name === "README.md" || name.startsWith("_")) continue;
 
-        await this.validateDocument(docPath, specPath, type);
+        await this.validateDocument(docPath, readmePath, type);
         this.checkFailFast();
       }
     }
@@ -124,30 +120,36 @@ export class BatchValidator {
   /**
    * Validates all documents of a specific type.
    *
-   * @param type - Document type key (e.g. "roles", "responsibilities")
-   * @throws Error if the type is not recognized
+   * @param type - Type string to filter by (matches directory name or relative path)
+   * @throws Error if no matching type is found
    */
   async validateType(type: string): Promise<BatchValidationResult[]> {
-    const config = DOCUMENT_TYPES[type];
-    if (!config) {
-      throw new Error(`Unknown document type: ${type}`);
-    }
-
     this.results = [];
     this.stoppedEarly = false;
 
-    const specPath = join(this.contentDir, "..", config.spec);
-    const globPattern = join(this.contentDir, "..", config.glob);
-    const docPaths = fg.sync(globPattern, { onlyFiles: true });
+    const domains = await this.discoverValidationDomains();
+    const matching = domains.filter(
+      (d) => d.type === type || basename(d.dir) === type,
+    );
 
-    for (const docPath of docPaths) {
+    if (matching.length === 0) {
+      throw new Error(`Unknown document type: ${type}`);
+    }
+
+    for (const { dir, readmePath, type: domainType } of matching) {
       if (this.stoppedEarly) break;
 
-      const name = basename(docPath);
-      if (name === "README.md" || name.startsWith("_")) continue;
+      const docPaths = fg.sync("*.md", { cwd: dir, onlyFiles: true, absolute: true });
 
-      await this.validateDocument(docPath, specPath, type);
-      this.checkFailFast();
+      for (const docPath of docPaths) {
+        if (this.stoppedEarly) break;
+
+        const name = basename(docPath);
+        if (name === "README.md" || name.startsWith("_")) continue;
+
+        await this.validateDocument(docPath, readmePath, domainType);
+        this.checkFailFast();
+      }
     }
 
     return this.results;
@@ -176,6 +178,40 @@ export class BatchValidator {
       errors: this.results.filter((r) => !r.compliant && r.severity === "error").length,
       byType,
     };
+  }
+
+  /**
+   * Discovers validation domains by scanning source directories.
+   *
+   * For each source directory, recursively finds all directories
+   * containing a README.md file. Each such directory becomes a
+   * validation domain.
+   */
+  private async discoverValidationDomains(): Promise<ValidationDomain[]> {
+    const domains: ValidationDomain[] = [];
+
+    for (const source of this.sources) {
+      const sourceAbsPath = join(this.root, source);
+      const readmePaths = fg.sync("**/README.md", {
+        cwd: sourceAbsPath,
+        onlyFiles: true,
+        absolute: true,
+      });
+
+      // Also check if the source dir itself has a README
+      const sourceReadme = join(sourceAbsPath, "README.md");
+      const allReadmes = readmePaths.includes(sourceReadme)
+        ? readmePaths
+        : [...readmePaths];
+
+      for (const readmePath of allReadmes) {
+        const dir = dirname(readmePath);
+        const type = relative(this.root, dir) || basename(dir);
+        domains.push({ dir, readmePath, type });
+      }
+    }
+
+    return domains;
   }
 
   /** Checks if the last result triggers fail-fast (stops on errors, not warnings). */

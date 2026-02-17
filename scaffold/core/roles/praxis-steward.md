@@ -5,18 +5,19 @@ manager: your-email@example.com
 alias: Stewart
 description: "Use this agent to navigate the Praxis framework, determine where content belongs, and ensure framework health. This agent should be invoked when adding or modifying Praxis content, when needing placement guidance (adding files to Praxis), or when maintaining framework quality."
 
-constitution: true
+constitution:
+  - context/constitution/*.md
 context:
-  - content/context/conventions/documentation.md
+  - context/conventions/documentation.md
 
 responsibilities:
-  - content/responsibilities/guide-content-placement.md
-  - content/responsibilities/review-content-quality.md
-  - content/responsibilities/audit-framework-health.md
+  - responsibilities/guide-content-placement.md
+  - responsibilities/review-content-quality.md
+  - responsibilities/audit-framework-health.md
 
 refs:
-  - content/reference/praxis-vocabulary.md
-  - content/reference/responsibilities-index.md
+  - reference/praxis-vocabulary.md
+  - reference/responsibilities-index.md
 ---
 
 # Praxis Steward (a.k.a **Stewart**)

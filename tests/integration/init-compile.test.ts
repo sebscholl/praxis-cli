@@ -27,14 +27,18 @@ describe("init → compile integration", () => {
   beforeAll(async () => {
     dir = join(tmpdir(), `praxis-integration-${randomUUID()}`);
 
-    // Scaffold the project (creates content/ which Paths uses for root detection)
+    // Scaffold the project (creates .praxis/ which Paths uses for root detection)
     initProject(dir, logger, SCAFFOLD_DIR);
 
-    // Write config enabling both profiles and claude-code plugin
+    // Enable claude-code plugin in config
     writeFileSync(
-      join(dir, "praxis.config.json"),
+      join(dir, ".praxis", "config.json"),
       JSON.stringify({
-        agentProfilesDir: "./agent-profiles",
+        sources: ["roles", "responsibilities", "reference", "context"],
+        rolesDir: "roles",
+        responsibilitiesDir: "responsibilities",
+        agentProfilesOutputDir: "./agent-profiles",
+        pluginsOutputDir: "./plugins",
         plugins: ["claude-code"],
       }),
     );

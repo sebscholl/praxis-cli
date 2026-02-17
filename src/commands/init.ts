@@ -82,10 +82,10 @@ export function initProject(targetDir: string, logger: Logger, scaffoldDir = SCA
   logger.info(`Initialized Praxis project: ${created} files created, ${skipped} skipped`);
   console.log();
   console.log("Next steps:");
-  console.log("  1. Edit content/context/constitution/ to define your organization's identity");
-  console.log("  2. Edit content/context/conventions/ to document your standards");
+  console.log("  1. Edit context/constitution/ to define your organization's identity");
+  console.log("  2. Edit context/conventions/ to document your standards");
   console.log("  3. Run `praxis compile` to generate agent files");
-  console.log("  4. Define new roles in content/roles/ as your organization grows");
+  console.log("  4. Define new roles in roles/ as your organization grows");
 }
 
 /**

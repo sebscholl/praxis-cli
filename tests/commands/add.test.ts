@@ -13,11 +13,20 @@ import { Logger } from "@/core/logger.js";
 /** Resolved path to the scaffold directory at the project root. */
 const SCAFFOLD_DIR = join(import.meta.dirname, "..", "..", "scaffold");
 
-/** Creates a fresh temporary directory with content/ so Paths resolves. */
+/** Creates a fresh temporary directory with .praxis/ and content dirs. */
 function makeTmpdir(): string {
   const dir = join(tmpdir(), `praxis-add-test-${randomUUID()}`);
+  mkdirSync(join(dir, ".praxis"), { recursive: true });
   mkdirSync(join(dir, "content", "roles"), { recursive: true });
   mkdirSync(join(dir, "content", "responsibilities"), { recursive: true });
+  // Write config pointing to content/ subdirs
+  writeFileSync(
+    join(dir, ".praxis", "config.json"),
+    JSON.stringify({
+      rolesDir: "content/roles",
+      responsibilitiesDir: "content/responsibilities",
+    }),
+  );
   return dir;
 }
 

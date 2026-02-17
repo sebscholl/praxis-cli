@@ -6,18 +6,19 @@ alias: "{required_alias}"
 
 description: "Use this agent to {LIST USECASES}. This agent should be invoked {EXPLAIN AUTO INVOCATION CRITERIA}."
 
-constitution: true
+constitution:
+  - context/constitution/*.md
 context:
-  - content/context/[relevant-context-file].md
+  - context/{relevant-context-file}.md
 
 responsibilities:
-  - content/responsibilities/[verb]-[noun].md
+  - responsibilities/{verb}-{noun}.md
 
 refs:
-  - content/reference/[relevant-reference].md
+  - reference/{relevant-reference}.md
 ---
 
-# [Role Name] (a.k.a **[Alias]**)
+# {role_name} (a.k.a **{role_name}**)
 
 Concise description of what this role does.
 
@@ -47,5 +48,5 @@ What this role is and why it exists. What value does it provide to the organizat
 
 | With | Interaction |
 |------|-------------|
-| [Other Role] | Receives X, provides Y |
-| [Another Role] | Collaborates on Z |
+| {Other Role} | Receives X, provides Y |
+| {Another Role} | Collaborates on Z |

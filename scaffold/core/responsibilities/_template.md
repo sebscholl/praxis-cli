@@ -5,7 +5,7 @@ owner: "{owner_role_alias}"
 schedule: "{optional_schedule}"
 ---
 
-# [Verb What]
+# {verb_what_title}
 
 > One-sentence description of what this responsibility accomplishes.
 

@@ -178,11 +178,16 @@ describe("RoleCompiler", () => {
       expect(profileOutput).not.toContain("name: tester");
     });
 
-    it("skips profile output when agentProfilesDir is false", async () => {
+    it("skips profile output when agentProfilesOutputDir is false", async () => {
       // Create compiler with profiles disabled
       writeFileSync(
-        join(tmpdir, "praxis.config.json"),
-        JSON.stringify({ agentProfilesDir: false, plugins: ["claude-code"] }),
+        join(tmpdir, ".praxis", "config.json"),
+        JSON.stringify({
+          agentProfilesOutputDir: false,
+          pluginsOutputDir: "./plugins",
+          rolesDir: "content/roles",
+          plugins: ["claude-code"],
+        }),
       );
       const noProfileCompiler = new RoleCompiler({ root: tmpdir, logger });
       const roleFile = join(rolesDir, "test-role.md");
@@ -197,8 +202,13 @@ describe("RoleCompiler", () => {
     it("skips plugin output when plugins array is empty", async () => {
       // Create compiler with no plugins
       writeFileSync(
-        join(tmpdir, "praxis.config.json"),
-        JSON.stringify({ agentProfilesDir: "./agent-profiles", plugins: [] }),
+        join(tmpdir, ".praxis", "config.json"),
+        JSON.stringify({
+          agentProfilesOutputDir: "./agent-profiles",
+          pluginsOutputDir: "./plugins",
+          rolesDir: "content/roles",
+          plugins: [],
+        }),
       );
       const noPluginCompiler = new RoleCompiler({ root: tmpdir, logger });
       const roleFile = join(rolesDir, "test-role.md");
@@ -236,19 +246,31 @@ describe("RoleCompiler", () => {
       expect(logOutput).toContain("Glob pattern matched zero files: content/reference/nope-*.md");
     });
 
-    it("warns when constitution enabled but no files found", async () => {
+    it("warns when constitution: true is deprecated", async () => {
+      const roleFile = join(rolesDir, "deprecated-const.md");
+      writeFileSync(
+        roleFile,
+        "---\nalias: DepConst\ndescription: test\nconstitution: true\n---\n# Deprecated Constitution",
+      );
+
+      await compiler.compile(roleFile);
+
+      expect(logOutput).toContain("constitution: true is deprecated");
+    });
+
+    it("warns when constitution patterns match zero files", async () => {
       // Remove all constitution files
       rmSync(join(tmpdir, "content", "context", "constitution"), { recursive: true, force: true });
 
       const roleFile = join(rolesDir, "no-const.md");
       writeFileSync(
         roleFile,
-        "---\nalias: NoConst\ndescription: test\nconstitution: true\n---\n# No Constitution",
+        '---\nalias: NoConst\ndescription: test\nconstitution: "content/context/constitution/*.md"\n---\n# No Constitution',
       );
 
       await compiler.compile(roleFile);
 
-      expect(logOutput).toContain("Constitution enabled but no files found");
+      expect(logOutput).toContain("Constitution patterns matched zero files");
     });
   });
 });

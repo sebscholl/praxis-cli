@@ -4,8 +4,9 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 
-import { BatchValidator, DOCUMENT_TYPES } from "@/validator/batch-validator.js";
+import { BatchValidator } from "@/validator/batch-validator.js";
 import { CacheManager } from "@/validator/cache-manager.js";
+import { PraxisConfig } from "@/core/config.js";
 
 import { createCompilerTmpdir } from "../helpers/compiler-tmpdir.js";
 
@@ -51,11 +52,13 @@ function useErrorFixture(): void {
 describe("BatchValidator", () => {
   let tmpdir: string;
   let cleanup: () => void;
+  let config: PraxisConfig;
 
   beforeAll(() => {
     const ctx = createCompilerTmpdir();
     tmpdir = ctx.tmpdir;
     cleanup = ctx.cleanup;
+    config = new PraxisConfig(tmpdir);
     process.env["OPENROUTER_API_KEY"] = "test-key";
   });
 
@@ -64,26 +67,14 @@ describe("BatchValidator", () => {
     delete process.env["OPENROUTER_API_KEY"];
   });
 
-  describe("DOCUMENT_TYPES", () => {
-    it("includes all expected document types", () => {
-      expect(Object.keys(DOCUMENT_TYPES)).toEqual([
-        "roles",
-        "responsibilities",
-        "reference",
-        "conventions",
-        "constitution",
-      ]);
-    });
-  });
-
   describe("validateAll()", () => {
     it("validates documents across all types", async () => {
       useCompliantFixture();
-      const contentDir = join(tmpdir, "content");
       const cacheManager = new CacheManager(join(tmpdir, ".praxis", "cache", "validation"));
 
       const batch = new BatchValidator({
-        contentDir,
+        root: tmpdir,
+        sources: config.sources,
         useCache: false,
         cacheManager,
       });
@@ -98,18 +89,24 @@ describe("BatchValidator", () => {
   describe("validateType()", () => {
     it("validates only documents of the specified type", async () => {
       useCompliantFixture();
-      const contentDir = join(tmpdir, "content");
 
-      const batch = new BatchValidator({ contentDir, useCache: false });
+      const batch = new BatchValidator({
+        root: tmpdir,
+        sources: config.sources,
+        useCache: false,
+      });
       const results = await batch.validateType("roles");
 
       expect(results.length).toBeGreaterThan(0);
-      expect(results.every((r) => r.type === "roles")).toBe(true);
+      expect(results.every((r) => r.type.includes("roles"))).toBe(true);
     });
 
     it("throws for unknown document type", async () => {
-      const contentDir = join(tmpdir, "content");
-      const batch = new BatchValidator({ contentDir, useCache: false });
+      const batch = new BatchValidator({
+        root: tmpdir,
+        sources: config.sources,
+        useCache: false,
+      });
 
       await expect(batch.validateType("bogus")).rejects.toThrow("Unknown document type: bogus");
     });
@@ -118,10 +115,10 @@ describe("BatchValidator", () => {
   describe("fail-fast", () => {
     it("stops on first error when fail-fast is enabled", async () => {
       useErrorFixture();
-      const contentDir = join(tmpdir, "content");
 
       const batch = new BatchValidator({
-        contentDir,
+        root: tmpdir,
+        sources: config.sources,
         failFast: true,
         useCache: false,
       });
@@ -135,9 +132,12 @@ describe("BatchValidator", () => {
   describe("summary()", () => {
     it("aggregates results correctly", async () => {
       useCompliantFixture();
-      const contentDir = join(tmpdir, "content");
 
-      const batch = new BatchValidator({ contentDir, useCache: false });
+      const batch = new BatchValidator({
+        root: tmpdir,
+        sources: config.sources,
+        useCache: false,
+      });
       await batch.validateAll();
       const summary = batch.summary();
 

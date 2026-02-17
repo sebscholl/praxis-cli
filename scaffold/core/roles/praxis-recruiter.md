@@ -5,18 +5,19 @@ manager: your-email@example.com
 alias: Remy
 description: "Use this agent to create and refine roles and responsibilities within the Praxis framework. This agent should be invoked when designing new roles or responsibilities, when refining contributor scope, or when needing critical feedback on contributor design."
 
-constitution: true
+constitution:
+  - context/constitution/*.md
 context:
-  - content/context/conventions/documentation.md
+  - context/conventions/documentation.md
 
 responsibilities:
-  - content/responsibilities/challenge-contributor-design.md
+  - responsibilities/challenge-contributor-design.md
 
 refs:
-  - content/reference/praxis-vocabulary.md
-  - content/reference/responsibilities-index.md
-  - content/roles/_template.md
-  - content/responsibilities/_template.md
+  - reference/praxis-vocabulary.md
+  - reference/responsibilities-index.md
+  - roles/_template.md
+  - responsibilities/_template.md
 ---
 
 # Praxis Recruiter (a.k.a **Remy**)

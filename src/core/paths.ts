@@ -2,11 +2,11 @@ import { existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 
 /**
- * Resolves standard directory paths within a Praxis project.
+ * Resolves the project root within a Praxis project.
  *
- * Finds the project root by walking up the filesystem until a `content/`
+ * Finds the project root by walking up the filesystem until a `.praxis/`
  * directory is found (the defining marker of a Praxis project), then
- * derives all standard content and output paths relative to that root.
+ * provides helpers for resolving paths relative to that root.
  */
 export class Paths {
   private readonly startDir: string;
@@ -16,27 +16,12 @@ export class Paths {
     this.startDir = startDir;
   }
 
-  /** The project root directory (parent of `content/`). */
+  /** The project root directory (parent of `.praxis/`). */
   get root(): string {
     if (!this.cachedRoot) {
       this.cachedRoot = this.findRoot();
     }
     return this.cachedRoot;
-  }
-
-  /** The `content/` directory containing all Praxis primitives. */
-  get contentDir(): string {
-    return join(this.root, "content");
-  }
-
-  /** The `content/roles/` directory containing role definitions. */
-  get rolesDir(): string {
-    return join(this.root, "content", "roles");
-  }
-
-  /** The `plugins/praxis/agents/` directory for compiled agent output. */
-  get agentsDir(): string {
-    return join(this.root, "plugins", "praxis", "agents");
   }
 
   /**
@@ -62,21 +47,21 @@ export class Paths {
   }
 
   /**
-   * Walks up from startDir to find the nearest `content/` directory.
+   * Walks up from startDir to find the nearest `.praxis/` directory.
    *
-   * @throws Error if no `content/` directory is found before reaching filesystem root
+   * @throws Error if no `.praxis/` directory is found before reaching filesystem root
    */
   private findRoot(): string {
     let current = resolve(this.startDir);
 
     for (;;) {
-      if (existsSync(join(current, "content"))) {
+      if (existsSync(join(current, ".praxis"))) {
         return current;
       }
 
       const parent = dirname(current);
       if (parent === current) {
-        throw new Error("Could not find Praxis root (no content/ directory found)");
+        throw new Error("Could not find Praxis root (no .praxis/ directory found)");
       }
 
       current = parent;

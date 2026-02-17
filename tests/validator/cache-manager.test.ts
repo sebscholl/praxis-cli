@@ -8,18 +8,19 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { CacheManager, contentHash } from "@/validator/cache-manager.js";
 
 describe("CacheManager", () => {
+  let projectRoot: string;
   let cacheRoot: string;
   let manager: CacheManager;
   let cleanup: () => void;
 
   beforeEach(() => {
-    const dir = join(tmpdir(), `praxis-cache-test-${randomUUID()}`);
-    mkdirSync(dir, { recursive: true });
-    cacheRoot = dir;
-    manager = new CacheManager(cacheRoot);
+    projectRoot = join(tmpdir(), `praxis-cache-test-${randomUUID()}`);
+    mkdirSync(projectRoot, { recursive: true });
+    cacheRoot = join(projectRoot, ".praxis", "cache", "validation");
+    manager = new CacheManager(cacheRoot, projectRoot);
 
     cleanup = () => {
-      rmSync(dir, { recursive: true, force: true });
+      rmSync(projectRoot, { recursive: true, force: true });
     };
   });
 
@@ -51,21 +52,26 @@ describe("CacheManager", () => {
   });
 
   describe("cachePathFor()", () => {
-    it("generates path with document name", () => {
-      const path = manager.cachePathFor("content/roles/my-role.md");
+    it("strips projectRoot from absolute document paths", () => {
+      const path = manager.cachePathFor(join(projectRoot, "roles", "my-role.md"));
 
       expect(path).toBe(join(cacheRoot, "roles", "my-role.json"));
     });
 
-    it("handles absolute paths with /content/ segment", () => {
-      const path = manager.cachePathFor("/home/user/praxis/content/roles/test.md");
+    it("handles nested source directories", () => {
+      const path = manager.cachePathFor(join(projectRoot, "content", "roles", "test.md"));
 
-      expect(path).toBe(join(cacheRoot, "roles", "test.json"));
+      expect(path).toBe(join(cacheRoot, "content", "roles", "test.json"));
+    });
+
+    it("uses relative paths as-is when no projectRoot match", () => {
+      const path = manager.cachePathFor("roles/my-role.md");
+
+      expect(path).toBe(join(cacheRoot, "roles", "my-role.json"));
     });
   });
 
   describe("write() and read()", () => {
-    const documentPath = "content/roles/test-role.md";
     const hash = "abcd1234";
     const result = {
       compliant: true,
@@ -74,10 +80,11 @@ describe("CacheManager", () => {
     };
     const metadata = {
       documentType: "role",
-      specPath: "content/roles/README.md",
+      specPath: "roles/README.md",
     };
 
     it("writes and reads back a cached result", () => {
+      const documentPath = join(projectRoot, "roles", "test-role.md");
       manager.write({ documentPath, contentHash: hash, result, metadata });
       const cached = manager.read({ documentPath, contentHash: hash });
 
@@ -85,12 +92,14 @@ describe("CacheManager", () => {
     });
 
     it("returns null for non-existent cache entries", () => {
+      const documentPath = join(projectRoot, "roles", "test-role.md");
       const cached = manager.read({ documentPath, contentHash: "nonexist" });
 
       expect(cached).toBeNull();
     });
 
     it("returns null when hash does not match", () => {
+      const documentPath = join(projectRoot, "roles", "test-role.md");
       manager.write({ documentPath, contentHash: hash, result, metadata });
       const cached = manager.read({ documentPath, contentHash: "different" });
 
@@ -98,6 +107,7 @@ describe("CacheManager", () => {
     });
 
     it("preserves severity field through serialization", () => {
+      const documentPath = join(projectRoot, "roles", "test-role.md");
       const failResult = {
         compliant: false,
         issues: ["Missing section"],
@@ -122,16 +132,16 @@ describe("CacheManager", () => {
 
     it("counts cache files after writes", () => {
       manager.write({
-        documentPath: "content/roles/a.md",
+        documentPath: join(projectRoot, "roles", "a.md"),
         contentHash: "aaaa1111",
         result: { compliant: true, issues: [], reason: "ok" },
-        metadata: { documentType: "role", specPath: "content/roles/README.md" },
+        metadata: { documentType: "role", specPath: "roles/README.md" },
       });
       manager.write({
-        documentPath: "content/roles/b.md",
+        documentPath: join(projectRoot, "roles", "b.md"),
         contentHash: "bbbb2222",
         result: { compliant: true, issues: [], reason: "ok" },
-        metadata: { documentType: "role", specPath: "content/roles/README.md" },
+        metadata: { documentType: "role", specPath: "roles/README.md" },
       });
 
       const stats = manager.stats();
@@ -144,19 +154,18 @@ describe("CacheManager", () => {
 
   describe("orphanedCacheFiles()", () => {
     it("identifies cache files for deleted documents", () => {
-      const contentDir = join(cacheRoot, "..", "content");
-      mkdirSync(join(contentDir, "roles"), { recursive: true });
-      writeFileSync(join(contentDir, "roles", "README.md"), "---\ntitle: Roles\n---\n# Roles");
+      mkdirSync(join(projectRoot, "roles"), { recursive: true });
+      writeFileSync(join(projectRoot, "roles", "README.md"), "# Roles");
 
       // Write a cache entry for a document that doesn't exist
       manager.write({
-        documentPath: "content/roles/deleted-role.md",
+        documentPath: join(projectRoot, "roles", "deleted-role.md"),
         contentHash: "dead1234",
         result: { compliant: true, issues: [], reason: "ok" },
-        metadata: { documentType: "role", specPath: "content/roles/README.md" },
+        metadata: { documentType: "role", specPath: "roles/README.md" },
       });
 
-      const orphans = manager.orphanedCacheFiles(contentDir);
+      const orphans = manager.orphanedCacheFiles(projectRoot, ["roles"]);
 
       expect(orphans.length).toBe(1);
       expect(orphans[0].reason).toBe("document_missing");
@@ -165,10 +174,10 @@ describe("CacheManager", () => {
   });
 
   describe("text sanitization", () => {
-    const metadata = { documentType: "role", specPath: "content/roles/README.md" };
+    const metadata = { documentType: "role", specPath: "roles/README.md" };
 
     it("strips control characters and double quotes from reason and issues", () => {
-      const documentPath = "content/roles/test-role.md";
+      const documentPath = join(projectRoot, "roles", "test-role.md");
       const hash = "abcd1234";
       const result = {
         compliant: false,
@@ -190,7 +199,7 @@ describe("CacheManager", () => {
     });
 
     it("preserves newlines and tabs in reason text", () => {
-      const documentPath = "content/roles/test-role.md";
+      const documentPath = join(projectRoot, "roles", "test-role.md");
       const hash = "abcd1234";
       const result = {
         compliant: true,

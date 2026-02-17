@@ -4,20 +4,20 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { analyzeProject } from "@/commands/status.js";
-import { Paths } from "@/core/paths.js";
+import { PraxisConfig } from "@/core/config.js";
 
 import { createCompilerTmpdir } from "../helpers/compiler-tmpdir.js";
 
 describe("analyzeProject", () => {
   let tmpdir: string;
   let cleanup: () => void;
-  let paths: Paths;
+  let config: PraxisConfig;
 
   beforeEach(() => {
     const ctx = createCompilerTmpdir();
     tmpdir = ctx.tmpdir;
     cleanup = ctx.cleanup;
-    paths = new Paths(tmpdir);
+    config = new PraxisConfig(tmpdir);
   });
 
   afterEach(() => {
@@ -25,7 +25,7 @@ describe("analyzeProject", () => {
   });
 
   it("counts roles, responsibilities, references, and context", async () => {
-    const report = await analyzeProject(paths);
+    const report = await analyzeProject(tmpdir, config);
 
     expect(report.counts.roles).toBe(1);
     expect(report.counts.responsibilities).toBe(1);
@@ -35,7 +35,7 @@ describe("analyzeProject", () => {
 
   it("excludes _template.md and README.md from counts", async () => {
     // The fixtures include README.md files — verify they're excluded
-    const report = await analyzeProject(paths);
+    const report = await analyzeProject(tmpdir, config);
 
     // If READMEs were counted, we'd have more than 1 role
     expect(report.counts.roles).toBe(1);
@@ -48,7 +48,7 @@ describe("analyzeProject", () => {
       "---\nalias: BadRefs\ndescription: test\nrefs:\n  - content/reference/nonexistent.md\n---\n# Bad",
     );
 
-    const report = await analyzeProject(paths);
+    const report = await analyzeProject(tmpdir, config);
 
     expect(report.danglingRefs).toContainEqual({
       role: "bad-refs.md",
@@ -62,7 +62,7 @@ describe("analyzeProject", () => {
       "---\ntitle: Orphan\ntype: responsibility\nowner: nobody\n---\n# Orphan",
     );
 
-    const report = await analyzeProject(paths);
+    const report = await analyzeProject(tmpdir, config);
 
     expect(report.orphanedResponsibilities).toContain("orphan.md");
   });
@@ -73,7 +73,7 @@ describe("analyzeProject", () => {
       "---\nalias: NoDesc\n---\n# No Description",
     );
 
-    const report = await analyzeProject(paths);
+    const report = await analyzeProject(tmpdir, config);
 
     expect(report.rolesMissingDescription).toContain("no-desc.md");
   });
@@ -84,7 +84,7 @@ describe("analyzeProject", () => {
       "---\nalias: BadGlob\ndescription: test\nrefs:\n  - content/reference/nope-*.md\n---\n# Bad",
     );
 
-    const report = await analyzeProject(paths);
+    const report = await analyzeProject(tmpdir, config);
 
     expect(report.zeroMatchGlobs).toContainEqual({
       role: "bad-glob.md",
@@ -98,7 +98,7 @@ describe("analyzeProject", () => {
       "---\ntitle: Unmatched\ntype: responsibility\nowner: phantom-role\n---\n# Unmatched",
     );
 
-    const report = await analyzeProject(paths);
+    const report = await analyzeProject(tmpdir, config);
 
     expect(report.unmatchedOwners).toContainEqual({
       responsibility: "unmatched.md",
@@ -107,7 +107,7 @@ describe("analyzeProject", () => {
   });
 
   it("reports clean for a healthy project", async () => {
-    const report = await analyzeProject(paths);
+    const report = await analyzeProject(tmpdir, config);
 
     // The default fixtures form a healthy project
     expect(report.danglingRefs).toEqual([]);

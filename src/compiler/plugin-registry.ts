@@ -18,13 +18,18 @@ const PLUGINS: Record<string, PluginConstructor> = {
  * @returns Array of instantiated plugins
  * @throws Error if an unknown plugin name is encountered
  */
-export function resolvePlugins(names: string[], root: string, logger: Logger): CompilerPlugin[] {
+export function resolvePlugins(
+  names: string[],
+  root: string,
+  logger: Logger,
+  pluginsOutputDir?: string,
+): CompilerPlugin[] {
   return names.map((name) => {
     const Constructor = PLUGINS[name];
     if (!Constructor) {
       const available = Object.keys(PLUGINS).join(", ");
       throw new Error(`Unknown plugin: "${name}". Available plugins: ${available}`);
     }
-    return new Constructor({ root, logger });
+    return new Constructor({ root, logger, pluginsOutputDir });
   });
 }

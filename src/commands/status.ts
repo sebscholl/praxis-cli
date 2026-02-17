@@ -1,4 +1,4 @@
-import { basename, join, relative } from "node:path";
+import { basename, join, relative, resolve } from "node:path";
 import { existsSync } from "node:fs";
 
 import type { Command } from "commander";
@@ -6,6 +6,7 @@ import fg from "fast-glob";
 
 import { Frontmatter } from "@/compiler/frontmatter.js";
 import { GlobExpander } from "@/compiler/glob-expander.js";
+import { PraxisConfig } from "@/core/config.js";
 import { Logger } from "@/core/logger.js";
 import { Paths } from "@/core/paths.js";
 
@@ -41,7 +42,8 @@ export function registerStatusCommand(program: Command): void {
       const logger = new Logger();
       try {
         const paths = new Paths();
-        const report = await analyzeProject(paths);
+        const config = new PraxisConfig(paths.root);
+        const report = await analyzeProject(paths.root, config);
         displayReport(report, logger);
 
         const hasIssues =
@@ -64,20 +66,32 @@ export function registerStatusCommand(program: Command): void {
 /**
  * Analyzes a Praxis project and returns a structured health report.
  *
- * Scans all content directories, checks cross-references between
+ * Scans configured directories, checks cross-references between
  * roles and responsibilities, and identifies common issues.
  *
- * @param paths - Paths instance pointed at the project root
+ * @param root - Project root directory
+ * @param config - PraxisConfig instance
  */
-export async function analyzeProject(paths: Paths): Promise<StatusReport> {
-  const root = paths.root;
+export async function analyzeProject(root: string, config: PraxisConfig): Promise<StatusReport> {
   const globExpander = new GlobExpander(root);
 
-  // Count content files by type
-  const roleFiles = await listContentFiles(paths.rolesDir);
-  const respFiles = await listContentFiles(join(root, "content", "responsibilities"));
-  const refFiles = await listContentFiles(join(root, "content", "reference"));
-  const ctxFiles = await listContentFiles(join(root, "content", "context"), true);
+  // Count content files by type using config-driven paths
+  const roleFiles = await listContentFiles(config.rolesDir);
+  const respFiles = await listContentFiles(config.responsibilitiesDir);
+
+  // Scan all sources for reference and context files by frontmatter type
+  let references = 0;
+  let contextCount = 0;
+  for (const source of config.sources) {
+    const sourceDir = resolve(root, source);
+    const allFiles = await listContentFiles(sourceDir, true);
+    for (const file of allFiles) {
+      const fm = new Frontmatter(file);
+      const type = fm.value("type") as string | undefined;
+      if (type === "reference") references++;
+      else if (type === "convention" || type === "constitution") contextCount++;
+    }
+  }
 
   // Build role alias map and check roles
   const roleAliases = new Map<string, string>();
@@ -148,8 +162,8 @@ export async function analyzeProject(paths: Paths): Promise<StatusReport> {
     counts: {
       roles: roleFiles.length,
       responsibilities: respFiles.length,
-      references: refFiles.length,
-      context: ctxFiles.length,
+      references,
+      context: contextCount,
     },
     orphanedResponsibilities,
     danglingRefs,
@@ -171,7 +185,9 @@ async function listContentFiles(dir: string, recursive = false): Promise<string[
   const pattern = recursive ? "**/*.md" : "*.md";
   const files = await fg(pattern, { cwd: dir, onlyFiles: true, absolute: true });
 
-  return files.filter((f) => !EXCLUDED_FILES.includes(basename(f)) && !basename(f).startsWith("_"));
+  return files.filter(
+    (f) => !EXCLUDED_FILES.includes(basename(f)) && !basename(f).startsWith("_"),
+  );
 }
 
 /**

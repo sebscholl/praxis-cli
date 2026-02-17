@@ -9,8 +9,8 @@ const FIXTURES_ROOT = join(import.meta.dirname, "..", "fixtures");
 /**
  * Creates a temporary directory pre-populated with test fixtures.
  *
- * Creates a fake project root with `content/` subdirectories,
- * copies all test fixtures into it, and writes a `praxis.config.json`
+ * Creates a fake project root with `.praxis/` marker, `content/` subdirectories,
+ * copies all test fixtures into it, and writes a `.praxis/config.json`
  * that enables the claude-code plugin for backward-compatible test behavior.
  *
  * Returns an object with path accessors and a cleanup function.
@@ -36,6 +36,7 @@ export function createCompilerTmpdir(): {
   mkdirSync(rolesDir, { recursive: true });
   mkdirSync(responsibilitiesDir, { recursive: true });
   mkdirSync(contextDir, { recursive: true });
+  mkdirSync(join(dir, ".praxis"), { recursive: true });
 
   // Copy fixtures
   const contentSource = join(FIXTURES_ROOT, "content");
@@ -43,11 +44,20 @@ export function createCompilerTmpdir(): {
     cpSync(contentSource, join(dir, "content"), { recursive: true });
   }
 
-  // Write default config enabling claude-code plugin
+  // Write config to .praxis/config.json
   writeFileSync(
-    join(dir, "praxis.config.json"),
+    join(dir, ".praxis", "config.json"),
     JSON.stringify({
-      agentProfilesDir: "./agent-profiles",
+      sources: [
+        "content/roles",
+        "content/responsibilities",
+        "content/reference",
+        "content/context",
+      ],
+      rolesDir: "content/roles",
+      responsibilitiesDir: "content/responsibilities",
+      agentProfilesOutputDir: "./agent-profiles",
+      pluginsOutputDir: "./plugins",
       plugins: ["claude-code"],
     }),
   );
