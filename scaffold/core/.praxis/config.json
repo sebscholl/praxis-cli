@@ -3,6 +3,9 @@
   "rolesDir": "roles",
   "responsibilitiesDir": "responsibilities",
   "agentProfilesOutputDir": "./agent-profiles",
-  "pluginsOutputDir": "./plugins",
-  "plugins": []
+  "plugins": [],
+  "validation": {
+    "apiKeyEnvVar": "OPENROUTER_API_KEY",
+    "model": "x-ai/grok-4.1-fast"
+  }
 }

@@ -3,22 +3,51 @@ import { join, resolve } from "node:path";
 
 const CONFIG_FILE = join(".praxis", "config.json");
 
+/** Normalized plugin configuration entry. */
+export interface PluginConfigEntry {
+  /** Plugin identifier (e.g. "claude-code"). */
+  name: string;
+  /** Full path to plugin output dir, resolved against project root. */
+  outputDir?: string;
+  /** Name used in the Claude Code plugin.json file. Default: "praxis". */
+  claudeCodePluginName?: string;
+}
+
+/** Raw plugin entry as it appears in config JSON. */
+export type RawPluginEntry = string | PluginConfigEntry;
+
+/** Validation configuration for the OpenRouter-based document validator. */
+export interface ValidationConfig {
+  /** Name of the environment variable containing the API key. */
+  apiKeyEnvVar: string;
+  /** OpenRouter model identifier to use for validation. */
+  model: string;
+}
+
 interface RawConfig {
   agentProfilesOutputDir?: string | false;
-  plugins?: string[];
+  plugins?: RawPluginEntry[];
   sources?: string[];
   rolesDir?: string;
   responsibilitiesDir?: string;
-  pluginsOutputDir?: string;
+  validation?: ValidationConfig;
 }
 
-const DEFAULT_CONFIG: Required<RawConfig> = {
+interface NormalizedConfig {
+  agentProfilesOutputDir: string | false;
+  plugins: PluginConfigEntry[];
+  sources: string[];
+  rolesDir: string;
+  responsibilitiesDir: string;
+  validation?: ValidationConfig;
+}
+
+const DEFAULT_CONFIG: NormalizedConfig = {
   agentProfilesOutputDir: "./agent-profiles",
   plugins: [],
   sources: ["roles", "responsibilities", "reference", "context"],
   rolesDir: "roles",
   responsibilitiesDir: "responsibilities",
-  pluginsOutputDir: "./plugins",
 };
 
 /**
@@ -29,7 +58,7 @@ const DEFAULT_CONFIG: Required<RawConfig> = {
  */
 export class PraxisConfig {
   private readonly root: string;
-  private readonly data: Required<RawConfig>;
+  private readonly data: NormalizedConfig;
 
   constructor(root: string) {
     this.root = root;
@@ -50,14 +79,19 @@ export class PraxisConfig {
     return resolve(this.root, val);
   }
 
-  /** Array of enabled plugin names (e.g. `["claude-code"]`). */
-  get plugins(): string[] {
+  /** Array of normalized plugin config entries. */
+  get plugins(): PluginConfigEntry[] {
     return this.data.plugins;
   }
 
-  /** Whether a specific plugin is enabled. */
+  /** Array of plugin name strings. */
+  get pluginNames(): string[] {
+    return this.data.plugins.map((p) => p.name);
+  }
+
+  /** Whether a specific plugin is enabled (by name). */
   pluginEnabled(name: string): boolean {
-    return this.data.plugins.includes(name);
+    return this.data.plugins.some((p) => p.name === name);
   }
 
   /** Array of source directory paths (relative to root) for validation and watch. */
@@ -75,12 +109,12 @@ export class PraxisConfig {
     return resolve(this.root, this.data.responsibilitiesDir);
   }
 
-  /** Absolute path to the plugins output directory. */
-  get pluginsOutputDir(): string {
-    return resolve(this.root, this.data.pluginsOutputDir);
+  /** Validation configuration, or undefined if not configured. */
+  get validation(): ValidationConfig | undefined {
+    return this.data.validation;
   }
 
-  private load(): Required<RawConfig> {
+  private load(): NormalizedConfig {
     const configPath = join(this.root, CONFIG_FILE);
 
     if (!existsSync(configPath)) {
@@ -91,11 +125,21 @@ export class PraxisConfig {
 
     return {
       agentProfilesOutputDir: raw.agentProfilesOutputDir ?? DEFAULT_CONFIG.agentProfilesOutputDir,
-      plugins: raw.plugins ?? DEFAULT_CONFIG.plugins,
+      plugins: this.normalizePlugins(raw.plugins ?? []),
       sources: raw.sources ?? DEFAULT_CONFIG.sources,
       rolesDir: raw.rolesDir ?? DEFAULT_CONFIG.rolesDir,
       responsibilitiesDir: raw.responsibilitiesDir ?? DEFAULT_CONFIG.responsibilitiesDir,
-      pluginsOutputDir: raw.pluginsOutputDir ?? DEFAULT_CONFIG.pluginsOutputDir,
+      validation: raw.validation,
     };
+  }
+
+  /** Normalizes raw plugin entries: strings become `{ name: theString }`. */
+  private normalizePlugins(raw: RawPluginEntry[]): PluginConfigEntry[] {
+    return raw.map((entry) => {
+      if (typeof entry === "string") {
+        return { name: entry };
+      }
+      return entry;
+    });
   }
 }

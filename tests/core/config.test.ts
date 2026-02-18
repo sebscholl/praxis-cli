@@ -37,7 +37,6 @@ describe("PraxisConfig", () => {
     expect(config.sources).toEqual(["roles", "responsibilities", "reference", "context"]);
     expect(config.rolesDir).toBe(join(dir, "roles"));
     expect(config.responsibilitiesDir).toBe(join(dir, "responsibilities"));
-    expect(config.pluginsOutputDir).toBe(join(dir, "plugins"));
   });
 
   it("loads agentProfilesOutputDir from config file", () => {
@@ -58,13 +57,48 @@ describe("PraxisConfig", () => {
     expect(config.agentProfilesOutputDir).toBeNull();
   });
 
-  it("loads plugins from config file", () => {
+  it("normalizes string plugins to PluginConfigEntry objects", () => {
     const dir = makeTmpdir();
     writeConfig(dir, { plugins: ["claude-code"] });
 
     const config = new PraxisConfig(dir);
 
-    expect(config.plugins).toEqual(["claude-code"]);
+    expect(config.plugins).toEqual([{ name: "claude-code" }]);
+  });
+
+  it("passes through object-form plugins", () => {
+    const dir = makeTmpdir();
+    writeConfig(dir, {
+      plugins: [{ name: "claude-code", outputDir: "./custom", claudeCodePluginName: "my-agents" }],
+    });
+
+    const config = new PraxisConfig(dir);
+
+    expect(config.plugins).toEqual([
+      { name: "claude-code", outputDir: "./custom", claudeCodePluginName: "my-agents" },
+    ]);
+  });
+
+  it("handles mixed string and object plugins", () => {
+    const dir = makeTmpdir();
+    writeConfig(dir, {
+      plugins: ["claude-code", { name: "claude-code", claudeCodePluginName: "alt" }],
+    });
+
+    const config = new PraxisConfig(dir);
+
+    expect(config.plugins).toHaveLength(2);
+    expect(config.plugins[0]).toEqual({ name: "claude-code" });
+    expect(config.plugins[1]).toEqual({ name: "claude-code", claudeCodePluginName: "alt" });
+  });
+
+  it("pluginNames returns array of name strings", () => {
+    const dir = makeTmpdir();
+    writeConfig(dir, { plugins: [{ name: "claude-code" }] });
+
+    const config = new PraxisConfig(dir);
+
+    expect(config.pluginNames).toEqual(["claude-code"]);
   });
 
   it("defaults missing keys when config file is partial", () => {
@@ -75,14 +109,24 @@ describe("PraxisConfig", () => {
 
     // agentProfilesOutputDir should use default
     expect(config.agentProfilesOutputDir).toBe(join(dir, "agent-profiles"));
-    expect(config.plugins).toEqual(["claude-code"]);
+    expect(config.plugins).toEqual([{ name: "claude-code" }]);
     expect(config.sources).toEqual(["roles", "responsibilities", "reference", "context"]);
     expect(config.rolesDir).toBe(join(dir, "roles"));
   });
 
-  it("pluginEnabled returns true for listed plugins", () => {
+  it("pluginEnabled returns true for string-form plugins", () => {
     const dir = makeTmpdir();
     writeConfig(dir, { plugins: ["claude-code"] });
+
+    const config = new PraxisConfig(dir);
+
+    expect(config.pluginEnabled("claude-code")).toBe(true);
+    expect(config.pluginEnabled("unknown")).toBe(false);
+  });
+
+  it("pluginEnabled returns true for object-form plugins", () => {
+    const dir = makeTmpdir();
+    writeConfig(dir, { plugins: [{ name: "claude-code", claudeCodePluginName: "my-org" }] });
 
     const config = new PraxisConfig(dir);
 
@@ -124,12 +168,21 @@ describe("PraxisConfig", () => {
     expect(config.responsibilitiesDir).toBe(join(dir, "knowledge", "responsibilities"));
   });
 
-  it("loads custom pluginsOutputDir from config", () => {
+  it("loads validation config from config file", () => {
     const dir = makeTmpdir();
-    writeConfig(dir, { pluginsOutputDir: "./output/plugins" });
+    writeConfig(dir, {
+      validation: { apiKeyEnvVar: "MY_KEY", model: "some-model" },
+    });
 
     const config = new PraxisConfig(dir);
 
-    expect(config.pluginsOutputDir).toBe(join(dir, "output", "plugins"));
+    expect(config.validation).toEqual({ apiKeyEnvVar: "MY_KEY", model: "some-model" });
+  });
+
+  it("returns undefined validation when not in config", () => {
+    const dir = makeTmpdir();
+    const config = new PraxisConfig(dir);
+
+    expect(config.validation).toBeUndefined();
   });
 });

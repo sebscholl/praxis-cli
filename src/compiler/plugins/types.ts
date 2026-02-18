@@ -1,4 +1,5 @@
 import type { AgentMetadata } from "../output-builder.js";
+import type { PluginConfigEntry } from "@/core/config.js";
 import type { Logger } from "@/core/logger.js";
 
 /**
@@ -26,5 +27,6 @@ export interface CompilerPlugin {
 export interface PluginOptions {
   root: string;
   logger: Logger;
-  pluginsOutputDir?: string;
+  /** Per-plugin configuration from config.json. */
+  pluginConfig?: PluginConfigEntry;
 }

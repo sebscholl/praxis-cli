@@ -5,11 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-02-18
+
+### Added
+
+- **Per-plugin configuration** — Plugins now support object-form entries with plugin-specific options alongside the existing string shorthand. The `claude-code` plugin accepts `outputDir` (full path to output directory, resolved against project root) and `claudeCodePluginName` (name used in `plugin.json`).
+- **Claude Code `plugin.json` management** — The Claude Code plugin now creates and maintains `.claude-plugin/plugin.json` inside the plugin output directory during compilation. Existing files are updated (only the `name` field), preserving user customizations.
+- **Configurable validation settings** — New `validation` section in `.praxis/config.json` for specifying the API key environment variable name (`apiKeyEnvVar`) and OpenRouter model (`model`). No hardcoded fallback defaults — the scaffold provides initial values and `praxis validate` exits with a helpful error if the config is missing.
+
+### Changed
+
+- **Plugin config type** — `plugins` array entries can now be strings or `{ name, outputDir?, claudeCodePluginName? }` objects. Strings are internally normalized to `{ name: theString }`.
+- **Claude Code plugin output** — Output directory defaults to `./plugins/praxis` but can be overridden per-plugin via `outputDir`. The `claudeCodePluginName` (default `"praxis"`) controls the `name` field in `plugin.json`.
+- **Validation commands** — `praxis validate` now reads `apiKeyEnvVar` and `model` from `.praxis/config.json` instead of using hardcoded values.
+- **Plugin scaffold structure** — Flattened `scaffold/plugins/claude-code/` (removed `plugin-name/` nesting). The `plugin.json` uses `{claudeCodePluginName}` as a template variable.
+- **`praxis init` plugin scaffolding** — Copies plugin scaffold files into the resolved `outputDir` and templates `{claudeCodePluginName}` in JSON files.
+
+### Removed
+
+- **`pluginsOutputDir` config option** — Replaced by per-plugin `outputDir`. The global base directory setting is no longer needed.
+- Hardcoded `OPENROUTER_API_KEY` env var name and `x-ai/grok-4.1-fast` model in the validator.
+
 ## [1.1.0] - 2026-02-17
 
 ### Added
 
-- **Configurable directory structure** — Project layout is now fully driven by `.praxis/config.json` instead of hardcoded paths. New config fields: `sources`, `rolesDir`, `responsibilitiesDir`, `pluginsOutputDir`.
+- **Configurable directory structure** — Project layout is now fully driven by `.praxis/config.json` instead of hardcoded paths. New config fields: `sources`, `rolesDir`, `responsibilitiesDir`.
 - **Source-based validation** — `BatchValidator` dynamically discovers validation domains by scanning configured `sources` directories for `README.md` specs, replacing the hardcoded 5-type lookup.
 - **Root-relative cache paths** — `CacheManager` accepts an optional `projectRoot` for computing cache paths, replacing the brittle `/content/` string-splitting logic.
 - **Multi-directory watch** — `praxis compile --watch` now creates one file watcher per source directory instead of watching a single `content/` folder.
@@ -34,7 +55,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `Paths.contentDir` getter — Callers now use `config.sources`.
 - `Paths.rolesDir` getter — Callers now use `config.rolesDir`.
-- `Paths.agentsDir` getter — Callers now use `config.pluginsOutputDir`.
+- `Paths.agentsDir` getter — Callers now use plugin-specific output directories.
 - `scaffold/core/content/` directory — Replaced by top-level `scaffold/core/roles/`, `scaffold/core/responsibilities/`, etc.
 - `scaffold/core/praxis.config.json` — Replaced by `scaffold/core/.praxis/config.json`.
 - Hardcoded `DOCUMENT_TYPES` constant in `BatchValidator`.
@@ -69,6 +90,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Project root detection via directory marker.
 - `praxis.config.json` with `agentProfilesDir` and `plugins` options.
 
+[1.2.0]: https://github.com/zarpay/praxis-cli/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/zarpay/praxis-cli/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/zarpay/praxis-cli/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/zarpay/praxis-cli/releases/tag/v1.0.0

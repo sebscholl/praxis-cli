@@ -1,41 +1,86 @@
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join, resolve } from "node:path";
 
 import type { AgentMetadata } from "../output-builder.js";
 import type { CompilerPlugin, PluginOptions } from "./types.js";
+
+/** Default plugin.json content used when no scaffold file exists. */
+const DEFAULT_PLUGIN_JSON = {
+  name: "praxis",
+  description: "A plugin for integrating assistant profiles with Claude.",
+  author: { name: "Your Name" },
+  keywords: ["productivity"],
+};
 
 /**
  * Claude Code compiler plugin.
  *
  * Takes a pure agent profile and wraps it with Claude Code YAML
- * frontmatter, then writes it to `plugins/praxis/agents/`.
+ * frontmatter, then writes it to `{outputDir}/agents/`.
+ *
+ * Also ensures the `.claude-plugin/plugin.json` manifest exists
+ * within the output directory.
  */
 export class ClaudeCodePlugin implements CompilerPlugin {
   readonly name = "claude-code";
 
+  private readonly claudeCodePluginName: string;
   private readonly outputDir: string;
+  private readonly agentsDir: string;
+  private manifestWritten = false;
 
-  constructor({ root, pluginsOutputDir }: PluginOptions) {
-    this.outputDir = pluginsOutputDir
-      ? join(pluginsOutputDir, "praxis", "agents")
-      : join(root, "plugins", "praxis", "agents");
+  constructor({ root, pluginConfig }: PluginOptions) {
+    this.claudeCodePluginName = pluginConfig?.claudeCodePluginName ?? "praxis";
+    this.outputDir = pluginConfig?.outputDir
+      ? resolve(root, pluginConfig.outputDir)
+      : join(root, "plugins", "praxis");
+    this.agentsDir = join(this.outputDir, "agents");
   }
 
   /**
    * Writes a Claude Code agent file with frontmatter.
    *
-   * Output goes to the configured plugins output directory.
+   * Also ensures the plugin.json manifest exists and is up to date.
    */
   compile(profileContent: string, metadata: AgentMetadata | null, roleAlias: string): void {
-    const outputDir = this.outputDir;
-    if (!existsSync(outputDir)) {
-      mkdirSync(outputDir, { recursive: true });
+    if (!existsSync(this.agentsDir)) {
+      mkdirSync(this.agentsDir, { recursive: true });
+    }
+
+    if (!this.manifestWritten) {
+      this.ensurePluginJson();
+      this.manifestWritten = true;
     }
 
     const frontmatter = this.buildFrontmatter(metadata);
     const content = frontmatter ? frontmatter + "\n" + profileContent : profileContent;
 
-    writeFileSync(join(outputDir, `${roleAlias.toLowerCase()}.md`), content);
+    writeFileSync(join(this.agentsDir, `${roleAlias.toLowerCase()}.md`), content);
+  }
+
+  /**
+   * Ensures `.claude-plugin/plugin.json` exists in the output directory.
+   *
+   * If it exists, updates the `name` field to match `claudeCodePluginName`
+   * while preserving other user customizations. If it doesn't exist,
+   * creates it from defaults.
+   */
+  private ensurePluginJson(): void {
+    const pluginJsonDir = join(this.outputDir, ".claude-plugin");
+    const pluginJsonPath = join(pluginJsonDir, "plugin.json");
+
+    if (!existsSync(pluginJsonDir)) {
+      mkdirSync(pluginJsonDir, { recursive: true });
+    }
+
+    if (existsSync(pluginJsonPath)) {
+      const existing = JSON.parse(readFileSync(pluginJsonPath, "utf-8"));
+      existing.name = this.claudeCodePluginName;
+      writeFileSync(pluginJsonPath, JSON.stringify(existing, null, 2) + "\n");
+    } else {
+      const pluginJson = { ...DEFAULT_PLUGIN_JSON, name: this.claudeCodePluginName };
+      writeFileSync(pluginJsonPath, JSON.stringify(pluginJson, null, 2) + "\n");
+    }
   }
 
   /**

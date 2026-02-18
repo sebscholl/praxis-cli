@@ -95,6 +95,10 @@ describe("initProject", () => {
     expect(config.plugins).toEqual([]);
     expect(config.sources).toEqual(["roles", "responsibilities", "reference", "context"]);
     expect(config.rolesDir).toBe("roles");
+    expect(config.validation).toEqual({
+      apiKeyEnvVar: "OPENROUTER_API_KEY",
+      model: "x-ai/grok-4.1-fast",
+    });
   });
 
   it("does not scaffold Claude Code files by default", () => {
@@ -104,11 +108,10 @@ describe("initProject", () => {
     initProject(dir, logger, SCAFFOLD_DIR);
 
     // Default config has plugins: [], so no Claude Code files
-    expect(existsSync(join(dir, ".claude-plugin"))).toBe(false);
     expect(existsSync(join(dir, "plugins", "praxis"))).toBe(false);
   });
 
-  it("scaffolds Claude Code files when plugin is in config", () => {
+  it("scaffolds Claude Code files when plugin is in config as string", () => {
     const dir = makeTmpdir();
     dirs.push(dir);
 
@@ -121,8 +124,54 @@ describe("initProject", () => {
 
     initProject(dir, logger, SCAFFOLD_DIR);
 
-    expect(existsSync(join(dir, ".claude-plugin", "marketplace.json"))).toBe(true);
+    // Default outputDir is plugins/praxis
     expect(existsSync(join(dir, "plugins", "praxis", ".claude-plugin", "plugin.json"))).toBe(true);
+  });
+
+  it("templates {claudeCodePluginName} in plugin.json during scaffold", () => {
+    const dir = makeTmpdir();
+    dirs.push(dir);
+
+    mkdirSync(join(dir, ".praxis"), { recursive: true });
+    writeFileSync(
+      join(dir, ".praxis", "config.json"),
+      JSON.stringify({ plugins: ["claude-code"] }),
+    );
+
+    initProject(dir, logger, SCAFFOLD_DIR);
+
+    const pluginJson = JSON.parse(
+      readFileSync(join(dir, "plugins", "praxis", ".claude-plugin", "plugin.json"), "utf-8"),
+    );
+    // Default claudeCodePluginName is "praxis"
+    expect(pluginJson.name).toBe("praxis");
+    // Should not contain the raw template variable
+    expect(JSON.stringify(pluginJson)).not.toContain("{claudeCodePluginName}");
+  });
+
+  it("scaffolds Claude Code files to custom outputDir when specified", () => {
+    const dir = makeTmpdir();
+    dirs.push(dir);
+
+    mkdirSync(join(dir, ".praxis"), { recursive: true });
+    writeFileSync(
+      join(dir, ".praxis", "config.json"),
+      JSON.stringify({
+        plugins: [{
+          name: "claude-code",
+          outputDir: "./my-plugins/custom",
+          claudeCodePluginName: "my-org",
+        }],
+      }),
+    );
+
+    initProject(dir, logger, SCAFFOLD_DIR);
+
+    const pluginJsonPath = join(dir, "my-plugins", "custom", ".claude-plugin", "plugin.json");
+    expect(existsSync(pluginJsonPath)).toBe(true);
+
+    const pluginJson = JSON.parse(readFileSync(pluginJsonPath, "utf-8"));
+    expect(pluginJson.name).toBe("my-org");
   });
 
   it("skips files that already exist", () => {
@@ -196,11 +245,10 @@ describe("initProject", () => {
     }
   });
 
-  it("creates Claude Code directories when plugin is enabled", () => {
+  it("creates Claude Code plugin directory when enabled", () => {
     const dir = makeTmpdir();
     dirs.push(dir);
 
-    // Pre-create config with claude-code enabled
     mkdirSync(join(dir, ".praxis"), { recursive: true });
     writeFileSync(
       join(dir, ".praxis", "config.json"),
@@ -209,13 +257,9 @@ describe("initProject", () => {
 
     initProject(dir, logger, SCAFFOLD_DIR);
 
-    const expectedDirs = [
-      "plugins/praxis/.claude-plugin",
-      ".claude-plugin",
-    ];
-
-    for (const expected of expectedDirs) {
-      expect(existsSync(join(dir, expected)), `expected directory ${expected} to exist`).toBe(true);
-    }
+    expect(
+      existsSync(join(dir, "plugins", "praxis", ".claude-plugin")),
+      "expected plugins/praxis/.claude-plugin to exist",
+    ).toBe(true);
   });
 });

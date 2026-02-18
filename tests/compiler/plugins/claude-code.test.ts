@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
@@ -109,5 +109,113 @@ describe("ClaudeCodePlugin", () => {
     plugin.compile("Content", null, "test");
 
     expect(existsSync(agentsDir)).toBe(true);
+  });
+
+  it("uses custom outputDir from pluginConfig", () => {
+    const root = makeTmpdir();
+    const plugin = new ClaudeCodePlugin({
+      root,
+      logger: new Logger(),
+      pluginConfig: { name: "claude-code", outputDir: "./my-plugins/custom" },
+    });
+
+    plugin.compile("# Role\n\nContent\n", { name: "tester", description: "Test" }, "Tester");
+
+    const outputFile = join(root, "my-plugins", "custom", "agents", "tester.md");
+    expect(existsSync(outputFile)).toBe(true);
+  });
+
+  it("writes plugin.json to .claude-plugin/ in the output directory", () => {
+    const root = makeTmpdir();
+    const plugin = new ClaudeCodePlugin({ root, logger: new Logger() });
+
+    plugin.compile("Content", { name: "tester", description: "Test" }, "Tester");
+
+    const pluginJsonPath = join(root, "plugins", "praxis", ".claude-plugin", "plugin.json");
+    expect(existsSync(pluginJsonPath)).toBe(true);
+
+    const pluginJson = JSON.parse(readFileSync(pluginJsonPath, "utf-8"));
+    expect(pluginJson.name).toBe("praxis");
+  });
+
+  it("uses custom claudeCodePluginName in plugin.json", () => {
+    const root = makeTmpdir();
+    const plugin = new ClaudeCodePlugin({
+      root,
+      logger: new Logger(),
+      pluginConfig: { name: "claude-code", claudeCodePluginName: "my-org" },
+    });
+
+    plugin.compile("Content", { name: "tester", description: "Test" }, "Tester");
+
+    const pluginJsonPath = join(root, "plugins", "praxis", ".claude-plugin", "plugin.json");
+    const pluginJson = JSON.parse(readFileSync(pluginJsonPath, "utf-8"));
+    expect(pluginJson.name).toBe("my-org");
+  });
+
+  it("uses custom outputDir and claudeCodePluginName together", () => {
+    const root = makeTmpdir();
+    const plugin = new ClaudeCodePlugin({
+      root,
+      logger: new Logger(),
+      pluginConfig: {
+        name: "claude-code",
+        outputDir: "./my-plugins/custom",
+        claudeCodePluginName: "my-org",
+      },
+    });
+
+    plugin.compile("Content", { name: "tester", description: "Test" }, "Tester");
+
+    // Agent file in custom output dir
+    expect(existsSync(join(root, "my-plugins", "custom", "agents", "tester.md"))).toBe(true);
+
+    // plugin.json in custom output dir with custom name
+    const pluginJson = JSON.parse(
+      readFileSync(join(root, "my-plugins", "custom", ".claude-plugin", "plugin.json"), "utf-8"),
+    );
+    expect(pluginJson.name).toBe("my-org");
+  });
+
+  it("updates existing plugin.json preserving user customizations", () => {
+    const root = makeTmpdir();
+
+    // Pre-create plugin.json with custom description and author
+    const pluginDir = join(root, "plugins", "praxis", ".claude-plugin");
+    mkdirSync(pluginDir, { recursive: true });
+    writeFileSync(
+      join(pluginDir, "plugin.json"),
+      JSON.stringify({
+        name: "old-name",
+        description: "My custom description",
+        author: { name: "Custom Author" },
+        keywords: ["ai", "agents"],
+      }),
+    );
+
+    const plugin = new ClaudeCodePlugin({ root, logger: new Logger() });
+    plugin.compile("Content", null, "test");
+
+    const pluginJson = JSON.parse(readFileSync(join(pluginDir, "plugin.json"), "utf-8"));
+    // Name should be updated
+    expect(pluginJson.name).toBe("praxis");
+    // Custom fields should be preserved
+    expect(pluginJson.description).toBe("My custom description");
+    expect(pluginJson.author.name).toBe("Custom Author");
+    expect(pluginJson.keywords).toEqual(["ai", "agents"]);
+  });
+
+  it("writes plugin.json only once for multiple compile calls", () => {
+    const root = makeTmpdir();
+    const plugin = new ClaudeCodePlugin({ root, logger: new Logger() });
+
+    plugin.compile("Content 1", { name: "a", description: "Agent A" }, "A");
+    plugin.compile("Content 2", { name: "b", description: "Agent B" }, "B");
+
+    // Both agents should exist
+    expect(existsSync(join(root, "plugins", "praxis", "agents", "a.md"))).toBe(true);
+    expect(existsSync(join(root, "plugins", "praxis", "agents", "b.md"))).toBe(true);
+    // plugin.json should exist (written on first compile call)
+    expect(existsSync(join(root, "plugins", "praxis", ".claude-plugin", "plugin.json"))).toBe(true);
   });
 });

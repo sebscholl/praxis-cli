@@ -2,7 +2,7 @@ import type { Command } from "commander";
 
 import chalk from "chalk";
 
-import { PraxisConfig } from "@/core/config.js";
+import { PraxisConfig, type ValidationConfig } from "@/core/config.js";
 import { Logger } from "@/core/logger.js";
 import { Paths } from "@/core/paths.js";
 import {
@@ -34,8 +34,10 @@ export function registerValidateCommand(program: Command): void {
       const logger = new Logger();
 
       try {
-        checkApiKey(logger);
         const paths = new Paths();
+        const config = new PraxisConfig(paths.root);
+        const validation = requireValidationConfig(config, logger);
+        checkApiKey(validation.apiKeyEnvVar, logger);
 
         const cacheManager = options.cache ? new CacheManager(undefined, paths.root) : undefined;
 
@@ -46,6 +48,8 @@ export function registerValidateCommand(program: Command): void {
           specPath: options.spec,
           useCache: options.cache,
           cacheManager,
+          apiKeyEnvVar: validation.apiKeyEnvVar,
+          model: validation.model,
         });
 
         const result = await validator.validate();
@@ -75,9 +79,11 @@ export function registerValidateCommand(program: Command): void {
         const logger = new Logger();
 
         try {
-          checkApiKey(logger);
           const paths = new Paths();
           const config = new PraxisConfig(paths.root);
+          const validation = requireValidationConfig(config, logger);
+          checkApiKey(validation.apiKeyEnvVar, logger);
+
           const cacheManager = options.cache ? new CacheManager(undefined, paths.root) : undefined;
 
           const batch = new BatchValidator({
@@ -86,6 +92,8 @@ export function registerValidateCommand(program: Command): void {
             failFast: options.failFast,
             useCache: options.cache,
             cacheManager,
+            apiKeyEnvVar: validation.apiKeyEnvVar,
+            model: validation.model,
           });
 
           let results: BatchValidationResult[];
@@ -131,13 +139,16 @@ export function registerValidateCommand(program: Command): void {
       const logger = new Logger();
 
       try {
-        checkApiKey(logger);
         const paths = new Paths();
         const config = new PraxisConfig(paths.root);
+        const validation = requireValidationConfig(config, logger);
+        checkApiKey(validation.apiKeyEnvVar, logger);
 
         const batch = new BatchValidator({
           root: paths.root,
           sources: config.sources,
+          apiKeyEnvVar: validation.apiKeyEnvVar,
+          model: validation.model,
         });
 
         console.log("Running CI validation...");
@@ -159,19 +170,41 @@ export function registerValidateCommand(program: Command): void {
 }
 
 /**
- * Checks that the OPENROUTER_API_KEY environment variable is set.
+ * Reads validation config from PraxisConfig and returns it.
+ *
+ * Exits with a helpful error message if the validation section
+ * is missing or incomplete in the config.
+ */
+function requireValidationConfig(config: PraxisConfig, logger: Logger): ValidationConfig {
+  const validation = config.validation;
+  if (!validation || !validation.apiKeyEnvVar || !validation.model) {
+    logger.error("Missing validation configuration in .praxis/config.json");
+    logger.error("");
+    logger.error("Add a 'validation' section to your config:");
+    logger.error('  "validation": {');
+    logger.error('    "apiKeyEnvVar": "OPENROUTER_API_KEY",');
+    logger.error('    "model": "x-ai/grok-4.1-fast"');
+    logger.error("  }");
+    logger.error("");
+    process.exit(1);
+  }
+  return validation;
+}
+
+/**
+ * Checks that the required API key environment variable is set.
  *
  * Prints setup instructions and exits if the key is missing.
  */
-function checkApiKey(logger: Logger): void {
-  const key = process.env["OPENROUTER_API_KEY"];
+function checkApiKey(envVarName: string, logger: Logger): void {
+  const key = process.env[envVarName];
   if (key && key.length > 0) return;
 
-  logger.error("Missing OPENROUTER_API_KEY environment variable");
+  logger.error(`Missing ${envVarName} environment variable`);
   logger.error("");
   logger.error("To use document validation, you need an OpenRouter API key:");
   logger.error("  1. Get a key at https://openrouter.ai/keys");
-  logger.error("  2. Set it: export OPENROUTER_API_KEY=your-key-here");
+  logger.error(`  2. Set it: export ${envVarName}=your-key-here`);
   logger.error("");
   process.exit(1);
 }

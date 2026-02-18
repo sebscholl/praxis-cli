@@ -57,8 +57,11 @@ export function createCompilerTmpdir(): {
       rolesDir: "content/roles",
       responsibilitiesDir: "content/responsibilities",
       agentProfilesOutputDir: "./agent-profiles",
-      pluginsOutputDir: "./plugins",
       plugins: ["claude-code"],
+      validation: {
+        apiKeyEnvVar: "OPENROUTER_API_KEY",
+        model: "x-ai/grok-4.1-fast",
+      },
     }),
   );
 

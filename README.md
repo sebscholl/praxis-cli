@@ -75,8 +75,11 @@ Here is the default configuration created by `praxis init`:
   "rolesDir": "roles",
   "responsibilitiesDir": "responsibilities",
   "agentProfilesOutputDir": "./agent-profiles",
-  "pluginsOutputDir": "./plugins",
-  "plugins": []
+  "plugins": [],
+  "validation": {
+    "apiKeyEnvVar": "OPENROUTER_API_KEY",
+    "model": "x-ai/grok-4.1-fast"
+  }
 }
 ```
 
@@ -124,17 +127,55 @@ The directory where responsibility `.md` files live. Used by `praxis add respons
 
 Where compiled pure agent profiles are written. Each role compiles to `{agentProfilesOutputDir}/{alias}.md`. Set to `false` to disable pure profile output entirely (useful if you only want plugin output).
 
-#### `pluginsOutputDir`
-
-**Type:** `string` | **Default:** `"./plugins"`
-
-Base directory for plugin output. Each plugin organizes its own files within this directory. For example, the Claude Code plugin writes to `{pluginsOutputDir}/praxis/agents/{alias}.md`.
-
 #### `plugins`
 
-**Type:** `string[]` | **Default:** `[]`
+**Type:** `(string | PluginConfigEntry)[]` | **Default:** `[]`
 
 Output plugins to enable. Currently available: `"claude-code"`. Plugins receive compiled profiles and write platform-specific output files. See [Claude Code Plugin](#claude-code-plugin).
+
+Each entry can be a simple string (plugin name) or an object with plugin-specific options:
+
+```jsonc
+// String form — uses all defaults
+"plugins": ["claude-code"]
+
+// Object form with customization
+"plugins": [{
+  "name": "claude-code",
+  "outputDir": "./plugins/my-custom-agents",
+  "claudeCodePluginName": "my-org-agents"
+}]
+```
+
+For the `claude-code` plugin, the object form supports:
+
+| Property | Type | Default | Purpose |
+|----------|------|---------|---------|
+| `name` | `string` | — | Plugin identifier (must be `"claude-code"`) |
+| `outputDir` | `string` | `"./plugins/praxis"` | Full path to plugin output directory, resolved against project root |
+| `claudeCodePluginName` | `string` | `"praxis"` | The `name` field written to `.claude-plugin/plugin.json` |
+
+#### `validation`
+
+**Type:** `{ apiKeyEnvVar: string, model: string }` | **Default:** (set in scaffold, no code fallback)
+
+Configuration for AI-powered document validation via [OpenRouter](https://openrouter.ai).
+
+```json
+{
+  "validation": {
+    "apiKeyEnvVar": "OPENROUTER_API_KEY",
+    "model": "x-ai/grok-4.1-fast"
+  }
+}
+```
+
+| Property | Purpose |
+|----------|---------|
+| `apiKeyEnvVar` | Name of the environment variable containing your OpenRouter API key |
+| `model` | OpenRouter model identifier to use for validation |
+
+The `praxis init` scaffold provides sensible defaults. If the `validation` section is missing from your config, `praxis validate` will exit with a helpful error directing you to add it.
 
 ## Role Frontmatter
 
@@ -235,7 +276,7 @@ praxis validate ci --strict                       # CI mode (fail on warnings)
 
 Validation results are cached in `.praxis/cache/validation/` and automatically invalidated when document or README content changes.
 
-Requires an [OpenRouter](https://openrouter.ai) API key:
+Requires the `validation` section in `.praxis/config.json` (see [Configuration](#configuration)) and the configured API key environment variable set:
 
 ```bash
 export OPENROUTER_API_KEY=your-key-here
@@ -251,9 +292,21 @@ Add `"claude-code"` to the `plugins` array to generate [Claude Code](https://doc
 }
 ```
 
-The plugin wraps each compiled profile with Claude Code YAML frontmatter and writes to `{pluginsOutputDir}/praxis/agents/{alias}.md`.
+The plugin wraps each compiled profile with Claude Code YAML frontmatter and writes agent files to `plugins/praxis/agents/{alias}.md`. It also creates and maintains the `.claude-plugin/plugin.json` manifest required by Claude Code inside the plugin output directory.
 
-Run `praxis init` again after enabling the plugin to scaffold the Claude Code plugin directory structure (`.claude-plugin/`, `plugins/praxis/`).
+To customize the output location or plugin name:
+
+```json
+{
+  "plugins": [{
+    "name": "claude-code",
+    "outputDir": "./plugins/my-agents",
+    "claudeCodePluginName": "my-org"
+  }]
+}
+```
+
+Run `praxis init` again after enabling the plugin to scaffold the Claude Code plugin directory structure.
 
 ### Agent Frontmatter Fields
 

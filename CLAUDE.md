@@ -33,7 +33,7 @@ Role .md file (with YAML frontmatter)
       (src/compiler/plugin-registry.ts → plugins/*)
 ```
 
-The **Claude Code plugin** (`src/compiler/plugins/claude-code.ts`) wraps the profile with YAML frontmatter (name, description, tools, model, permissionMode) and writes to `plugins/praxis/agents/{alias}.md`.
+The **Claude Code plugin** (`src/compiler/plugins/claude-code.ts`) wraps the profile with YAML frontmatter (name, description, tools, model, permissionMode), writes to `{outputDir}/agents/{alias}.md` (default `plugins/praxis/agents/`), and creates/updates `.claude-plugin/plugin.json` in the output directory.
 
 ### Validator Pipeline
 
@@ -41,7 +41,7 @@ The **Claude Code plugin** (`src/compiler/plugins/claude-code.ts`) wraps the pro
 Document .md + directory README.md (spec)
   → Content hash computed (SHA256, 8-char prefix)
   → Cache checked: .praxis/cache/validation/{type}/{name}.json
-  → On miss: LLM call via OpenRouter API (OPENROUTER_API_KEY env var)
+  → On miss: LLM call via OpenRouter API (env var name from config.validation.apiKeyEnvVar)
   → Response parsed (Yes/Maybe/No + issues)
   → Result cached with content_hash for invalidation
 ```
@@ -59,12 +59,12 @@ Config lives at `{root}/.praxis/config.json` with these fields:
 - `rolesDir: string` — where role `.md` files live (default: `"roles"`)
 - `responsibilitiesDir: string` — where responsibility `.md` files live (default: `"responsibilities"`)
 - `agentProfilesOutputDir: string | false` — where pure profiles are written (default: `"./agent-profiles"`)
-- `pluginsOutputDir: string` — base directory for plugin output (default: `"./plugins"`)
-- `plugins: string[]` — enabled plugins (default: `[]`)
+- `plugins: (string | PluginConfigEntry)[]` — enabled plugins with optional per-plugin config (default: `[]`). String entries are normalized to `{ name: theString }`. Object entries support `name`, `outputDir`, `claudeCodePluginName`.
+- `validation?: { apiKeyEnvVar: string, model: string }` — OpenRouter API key env var name and model for `praxis validate`. No code defaults; scaffold provides initial values.
 
 ### Plugin System
 
-Plugins implement `CompilerPlugin` interface (`src/compiler/plugins/types.ts`): `name` property and `compile(profileContent, metadata, roleAlias)` method. Registered in `src/compiler/plugin-registry.ts`. Enabled via `plugins` array in config. Each plugin organizes its output within `pluginsOutputDir` (e.g., Claude Code writes to `{pluginsOutputDir}/praxis/agents/`).
+Plugins implement `CompilerPlugin` interface (`src/compiler/plugins/types.ts`): `name` property and `compile(profileContent, metadata, roleAlias)` method. Registered in `src/compiler/plugin-registry.ts`. Enabled via `plugins` array in config. Each plugin receives a `PluginConfigEntry` with per-plugin options (e.g., `outputDir`, `claudeCodePluginName`). The Claude Code plugin writes agent files to `{outputDir}/agents/` and manages `.claude-plugin/plugin.json`.
 
 ## Code Conventions
 

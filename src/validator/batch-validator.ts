@@ -51,6 +51,8 @@ export class BatchValidator {
 
   private readonly useCache: boolean;
   private readonly cacheManager: CacheManager | null;
+  private readonly apiKeyEnvVar?: string;
+  private readonly model?: string;
   private results: BatchValidationResult[] = [];
   private stoppedEarly = false;
 
@@ -60,12 +62,16 @@ export class BatchValidator {
     failFast = false,
     useCache = true,
     cacheManager,
+    apiKeyEnvVar,
+    model,
   }: {
     root: string;
     sources: string[];
     failFast?: boolean;
     useCache?: boolean;
     cacheManager?: CacheManager;
+    apiKeyEnvVar?: string;
+    model?: string;
   }) {
     this.root = root;
     this.sources = sources;
@@ -73,6 +79,8 @@ export class BatchValidator {
     this.useCache = useCache;
     this.cacheManager = cacheManager ?? (useCache ? new CacheManager(undefined, root) : null);
     this.cacheStats = { hits: 0, misses: 0 };
+    this.apiKeyEnvVar = apiKeyEnvVar;
+    this.model = model;
   }
 
   /** Whether validation was stopped early due to fail-fast. */
@@ -242,6 +250,8 @@ export class BatchValidator {
         specPath,
         useCache: this.useCache,
         cacheManager: this.cacheManager ?? undefined,
+        apiKeyEnvVar: this.apiKeyEnvVar,
+        model: this.model,
       });
 
       const result = await validator.validate();

@@ -145,12 +145,7 @@ export class RoleCompiler {
     }
 
     // Run each enabled plugin
-    const plugins = resolvePlugins(
-      this.config.plugins,
-      this.root,
-      this.logger,
-      this.config.pluginsOutputDir,
-    );
+    const plugins = resolvePlugins(this.config.plugins, this.root, this.logger);
     for (const plugin of plugins) {
       plugin.compile(profile, metadata, roleAlias);
     }

@@ -1,4 +1,12 @@
-import { copyFileSync, existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 
 import type { Command } from "commander";
@@ -69,13 +77,30 @@ export function initProject(targetDir: string, logger: Logger, scaffoldDir = SCA
   const config = new PraxisConfig(targetDir);
 
   // Step 3: Copy plugin scaffold files for each enabled plugin
-  for (const pluginName of config.plugins) {
-    const pluginScaffoldDir = join(scaffoldDir, "plugins", pluginName);
-    if (existsSync(pluginScaffoldDir)) {
-      const pluginResult = copyScaffoldDir(pluginScaffoldDir, targetDir, logger);
-      created += pluginResult.created;
-      skipped += pluginResult.skipped;
+  for (const pluginEntry of config.plugins) {
+    const pluginScaffoldDir = join(scaffoldDir, "plugins", pluginEntry.name);
+    if (!existsSync(pluginScaffoldDir)) {
+      continue;
     }
+
+    // Resolve the plugin output directory within the target
+    const pluginOutputDir = pluginEntry.outputDir
+      ? resolve(targetDir, pluginEntry.outputDir)
+      : join(targetDir, "plugins", "praxis");
+
+    const templateVars: Record<string, string> = {
+      claudeCodePluginName: pluginEntry.claudeCodePluginName ?? "praxis",
+    };
+
+    const pluginResult = copyPluginScaffold(
+      pluginScaffoldDir,
+      pluginOutputDir,
+      templateVars,
+      logger,
+      targetDir,
+    );
+    created += pluginResult.created;
+    skipped += pluginResult.skipped;
   }
 
   console.log();
@@ -117,6 +142,60 @@ function copyScaffoldDir(
 
     copyFileSync(srcPath, destPath);
     logger.success(`Created ${relPath}`);
+    created++;
+  }
+
+  return { created, skipped };
+}
+
+/**
+ * Copies plugin scaffold files into the resolved plugin output directory.
+ *
+ * Replaces template variables (e.g. `{claudeCodePluginName}`) in `.json` file contents.
+ *
+ * @param sourceDir - Plugin scaffold source directory
+ * @param targetPluginDir - Resolved output directory for this plugin
+ * @param templateVars - Template variables to substitute in JSON files
+ * @param logger - Logger instance
+ * @param projectRoot - Project root for relative path display
+ * @returns Count of files created and skipped
+ */
+function copyPluginScaffold(
+  sourceDir: string,
+  targetPluginDir: string,
+  templateVars: Record<string, string>,
+  logger: Logger,
+  projectRoot: string,
+): { created: number; skipped: number } {
+  let created = 0;
+  let skipped = 0;
+
+  for (const relPath of walkDir(sourceDir)) {
+    const srcPath = join(sourceDir, relPath);
+    const destPath = join(targetPluginDir, relPath);
+    const destDir = dirname(destPath);
+
+    if (!existsSync(destDir)) {
+      mkdirSync(destDir, { recursive: true });
+    }
+
+    if (existsSync(destPath)) {
+      skipped++;
+      continue;
+    }
+
+    if (relPath.endsWith(".json")) {
+      let content = readFileSync(srcPath, "utf-8");
+      for (const [key, value] of Object.entries(templateVars)) {
+        content = content.replaceAll(`{${key}}`, value);
+      }
+      writeFileSync(destPath, content);
+    } else {
+      copyFileSync(srcPath, destPath);
+    }
+
+    const displayPath = relative(projectRoot, destPath);
+    logger.success(`Created ${displayPath}`);
     created++;
   }
 

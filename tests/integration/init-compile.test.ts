@@ -38,7 +38,6 @@ describe("init → compile integration", () => {
         rolesDir: "roles",
         responsibilitiesDir: "responsibilities",
         agentProfilesOutputDir: "./agent-profiles",
-        pluginsOutputDir: "./plugins",
         plugins: ["claude-code"],
       }),
     );
@@ -66,6 +65,14 @@ describe("init → compile integration", () => {
     const agentsDir = join(dir, "plugins", "praxis", "agents");
     const files = readdirSync(agentsDir).filter((f) => f.endsWith(".md"));
     expect(files).toHaveLength(2);
+  });
+
+  it("produces plugin.json in the plugin directory", () => {
+    const pluginJsonPath = join(dir, "plugins", "praxis", ".claude-plugin", "plugin.json");
+    expect(existsSync(pluginJsonPath)).toBe(true);
+
+    const pluginJson = JSON.parse(readFileSync(pluginJsonPath, "utf-8"));
+    expect(pluginJson.name).toBe("praxis");
   });
 
   it("produces exactly 2 pure agent profile files", () => {

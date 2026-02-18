@@ -37,17 +37,23 @@ export class DocumentValidator {
   private readonly useCache: boolean;
   private readonly cacheManager: CacheManager | null;
   private wasCacheHit = false;
+  private readonly apiKeyEnvVar?: string;
+  private readonly model?: string;
 
   constructor({
     documentPath,
     specPath,
     useCache = true,
     cacheManager,
+    apiKeyEnvVar,
+    model,
   }: {
     documentPath: string;
     specPath?: string;
     useCache?: boolean;
     cacheManager?: CacheManager;
+    apiKeyEnvVar?: string;
+    model?: string;
   }) {
     this.documentPath = documentPath;
     this.documentContent = readFileSync(documentPath, "utf-8");
@@ -56,6 +62,8 @@ export class DocumentValidator {
     this.readmeContent = readFileSync(this.readmePath, "utf-8");
     this.useCache = useCache;
     this.cacheManager = cacheManager ?? (useCache ? new CacheManager() : null);
+    this.apiKeyEnvVar = apiKeyEnvVar;
+    this.model = model;
   }
 
   /** Whether the last validate() call returned a cached result. */
@@ -116,9 +124,25 @@ export class DocumentValidator {
    * @throws Error if OPENROUTER_API_KEY is not set or the API returns an error
    */
   private async callOpenRouter(): Promise<string> {
-    const apiKey = process.env["OPENROUTER_API_KEY"];
+    const envVarName = this.apiKeyEnvVar;
+    if (!envVarName) {
+      throw new Error(
+        "Validation requires 'apiKeyEnvVar' to be configured. " +
+          "Add a 'validation' section to .praxis/config.json with 'apiKeyEnvVar' and 'model'.",
+      );
+    }
+
+    const apiKey = process.env[envVarName];
     if (!apiKey) {
-      throw new Error("OPENROUTER_API_KEY environment variable not set");
+      throw new Error(`${envVarName} environment variable not set`);
+    }
+
+    const modelName = this.model;
+    if (!modelName) {
+      throw new Error(
+        "Validation requires 'model' to be configured. " +
+          "Add a 'validation' section to .praxis/config.json with 'apiKeyEnvVar' and 'model'.",
+      );
     }
 
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -128,7 +152,7 @@ export class DocumentValidator {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "x-ai/grok-4.1-fast",
+        model: modelName,
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
           { role: "user", content: this.buildValidationQuestion() },

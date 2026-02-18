@@ -122,6 +122,8 @@ describe("DocumentValidator", () => {
       const validator = new DocumentValidator({
         documentPath: join(tmpdir, "content", "roles", "test-role.md"),
         useCache: false,
+        apiKeyEnvVar: "OPENROUTER_API_KEY",
+        model: "x-ai/grok-4.1-fast",
       });
 
       const result = await validator.validate();
@@ -137,6 +139,8 @@ describe("DocumentValidator", () => {
       const validator = new DocumentValidator({
         documentPath: join(tmpdir, "content", "roles", "test-role.md"),
         useCache: false,
+        apiKeyEnvVar: "OPENROUTER_API_KEY",
+        model: "x-ai/grok-4.1-fast",
       });
 
       const result = await validator.validate();
@@ -153,6 +157,8 @@ describe("DocumentValidator", () => {
       const validator = new DocumentValidator({
         documentPath: join(tmpdir, "content", "roles", "test-role.md"),
         useCache: false,
+        apiKeyEnvVar: "OPENROUTER_API_KEY",
+        model: "x-ai/grok-4.1-fast",
       });
 
       const result = await validator.validate();
@@ -169,6 +175,8 @@ describe("DocumentValidator", () => {
       const validator = new DocumentValidator({
         documentPath: join(tmpdir, "content", "roles", "test-role.md"),
         useCache: false,
+        apiKeyEnvVar: "OPENROUTER_API_KEY",
+        model: "x-ai/grok-4.1-fast",
       });
 
       const result = await validator.validate();
@@ -176,6 +184,46 @@ describe("DocumentValidator", () => {
       expect(result.issues).toContain("Missing required `owner` field in frontmatter");
       expect(result.issues).toContain("Missing Objective section");
       expect(result.issues).toContain("Missing Criteria section");
+    });
+
+    it("throws when apiKeyEnvVar is not provided", async () => {
+      const validator = new DocumentValidator({
+        documentPath: join(tmpdir, "content", "roles", "test-role.md"),
+        useCache: false,
+      });
+
+      await expect(validator.validate()).rejects.toThrow("apiKeyEnvVar");
+    });
+
+    it("throws when model is not provided", async () => {
+      process.env["MY_KEY"] = "test-key";
+
+      const validator = new DocumentValidator({
+        documentPath: join(tmpdir, "content", "roles", "test-role.md"),
+        useCache: false,
+        apiKeyEnvVar: "MY_KEY",
+      });
+
+      await expect(validator.validate()).rejects.toThrow("model");
+
+      delete process.env["MY_KEY"];
+    });
+
+    it("uses custom apiKeyEnvVar", async () => {
+      useFixture("compliant");
+      process.env["CUSTOM_API_KEY"] = "test-key";
+
+      const validator = new DocumentValidator({
+        documentPath: join(tmpdir, "content", "roles", "test-role.md"),
+        useCache: false,
+        apiKeyEnvVar: "CUSTOM_API_KEY",
+        model: "x-ai/grok-4.1-fast",
+      });
+
+      const result = await validator.validate();
+      expect(result.compliant).toBe(true);
+
+      delete process.env["CUSTOM_API_KEY"];
     });
   });
 
@@ -203,6 +251,8 @@ describe("DocumentValidator", () => {
       const validator1 = new DocumentValidator({
         documentPath: join(tmpdir, "content", "roles", "test-role.md"),
         cacheManager,
+        apiKeyEnvVar: "OPENROUTER_API_KEY",
+        model: "x-ai/grok-4.1-fast",
       });
       await validator1.validate();
       expect(validator1.cacheHit).toBe(false);
@@ -210,6 +260,8 @@ describe("DocumentValidator", () => {
       const validator2 = new DocumentValidator({
         documentPath: join(tmpdir, "content", "roles", "test-role.md"),
         cacheManager,
+        apiKeyEnvVar: "OPENROUTER_API_KEY",
+        model: "x-ai/grok-4.1-fast",
       });
       await validator2.validate();
       expect(validator2.cacheHit).toBe(true);

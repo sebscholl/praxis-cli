@@ -77,6 +77,8 @@ describe("BatchValidator", () => {
         sources: config.sources,
         useCache: false,
         cacheManager,
+        apiKeyEnvVar: "OPENROUTER_API_KEY",
+        model: "x-ai/grok-4.1-fast",
       });
 
       const results = await batch.validateAll();
@@ -94,6 +96,8 @@ describe("BatchValidator", () => {
         root: tmpdir,
         sources: config.sources,
         useCache: false,
+        apiKeyEnvVar: "OPENROUTER_API_KEY",
+        model: "x-ai/grok-4.1-fast",
       });
       const results = await batch.validateType("roles");
 
@@ -106,6 +110,8 @@ describe("BatchValidator", () => {
         root: tmpdir,
         sources: config.sources,
         useCache: false,
+        apiKeyEnvVar: "OPENROUTER_API_KEY",
+        model: "x-ai/grok-4.1-fast",
       });
 
       await expect(batch.validateType("bogus")).rejects.toThrow("Unknown document type: bogus");
@@ -121,6 +127,8 @@ describe("BatchValidator", () => {
         sources: config.sources,
         failFast: true,
         useCache: false,
+        apiKeyEnvVar: "OPENROUTER_API_KEY",
+        model: "x-ai/grok-4.1-fast",
       });
 
       await batch.validateAll();
@@ -137,6 +145,8 @@ describe("BatchValidator", () => {
         root: tmpdir,
         sources: config.sources,
         useCache: false,
+        apiKeyEnvVar: "OPENROUTER_API_KEY",
+        model: "x-ai/grok-4.1-fast",
       });
       await batch.validateAll();
       const summary = batch.summary();

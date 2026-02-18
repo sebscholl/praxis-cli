@@ -184,7 +184,6 @@ describe("RoleCompiler", () => {
         join(tmpdir, ".praxis", "config.json"),
         JSON.stringify({
           agentProfilesOutputDir: false,
-          pluginsOutputDir: "./plugins",
           rolesDir: "content/roles",
           plugins: ["claude-code"],
         }),
@@ -205,7 +204,6 @@ describe("RoleCompiler", () => {
         join(tmpdir, ".praxis", "config.json"),
         JSON.stringify({
           agentProfilesOutputDir: "./agent-profiles",
-          pluginsOutputDir: "./plugins",
           rolesDir: "content/roles",
           plugins: [],
         }),
