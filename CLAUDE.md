@@ -46,7 +46,7 @@ Document .md + directory README.md (spec)
   → Result cached with content_hash for invalidation
 ```
 
-Key files: `src/validator/document-validator.ts`, `src/validator/cache-manager.ts`, `src/validator/batch-validator.ts`.
+Key files: `src/validator/document-validator.ts`, `src/validator/cache-manager.ts`, `src/validator/batch-validator.ts`, `src/validator/report-formatter.ts`.
 
 ### Project Root Detection
 

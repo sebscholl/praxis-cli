@@ -18,6 +18,7 @@ export interface ValidationSummary {
   compliant: number;
   warnings: number;
   errors: number;
+  notValidated: number;
   byType: Record<
     string,
     {
@@ -55,6 +56,7 @@ export class BatchValidator {
   private readonly model?: string;
   private results: BatchValidationResult[] = [];
   private stoppedEarly = false;
+  private sourceDocCount = 0;
 
   constructor({
     root,
@@ -103,6 +105,7 @@ export class BatchValidator {
   async validateAll(): Promise<BatchValidationResult[]> {
     this.results = [];
     this.stoppedEarly = false;
+    this.sourceDocCount = this.countAllSourceDocuments();
 
     const domains = await this.discoverValidationDomains();
 
@@ -134,6 +137,7 @@ export class BatchValidator {
   async validateType(type: string): Promise<BatchValidationResult[]> {
     this.results = [];
     this.stoppedEarly = false;
+    this.sourceDocCount = this.countAllSourceDocuments();
 
     const domains = await this.discoverValidationDomains();
     const matching = domains.filter(
@@ -179,13 +183,43 @@ export class BatchValidator {
       }
     }
 
+    const validated = this.results.length;
+
     return {
-      total: this.results.length,
+      total: this.sourceDocCount > 0 ? this.sourceDocCount : validated,
       compliant: this.results.filter((r) => r.compliant).length,
       warnings: this.results.filter((r) => !r.compliant && r.severity === "warning").length,
       errors: this.results.filter((r) => !r.compliant && r.severity === "error").length,
+      notValidated: this.sourceDocCount > 0 ? this.sourceDocCount - validated : 0,
       byType,
     };
+  }
+
+  /**
+   * Counts all .md documents across source directories.
+   *
+   * Includes documents in directories without a README.md spec,
+   * providing the true total of source documents. Excludes READMEs
+   * and template files (those starting with `_`).
+   */
+  private countAllSourceDocuments(): number {
+    let count = 0;
+
+    for (const source of this.sources) {
+      const sourceAbsPath = join(this.root, source);
+      const allMdFiles = fg.sync("**/*.md", {
+        cwd: sourceAbsPath,
+        onlyFiles: true,
+      });
+
+      for (const file of allMdFiles) {
+        const name = basename(file);
+        if (name === "README.md" || name.startsWith("_")) continue;
+        count++;
+      }
+    }
+
+    return count;
   }
 
   /**

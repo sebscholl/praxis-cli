@@ -2,6 +2,7 @@ import { basename, join, relative, resolve } from "node:path";
 import { existsSync } from "node:fs";
 
 import type { Command } from "commander";
+import chalk from "chalk";
 import fg from "fast-glob";
 
 import { Frontmatter } from "@/compiler/frontmatter.js";
@@ -9,6 +10,7 @@ import { GlobExpander } from "@/compiler/glob-expander.js";
 import { PraxisConfig } from "@/core/config.js";
 import { Logger } from "@/core/logger.js";
 import { Paths } from "@/core/paths.js";
+import { CacheManager } from "@/validator/cache-manager.js";
 
 /** Files excluded from content counts. */
 const EXCLUDED_FILES = ["_template.md", "README.md"];
@@ -20,6 +22,12 @@ export interface StatusReport {
     responsibilities: number;
     references: number;
     context: number;
+  };
+  validation: {
+    pass: number;
+    warn: number;
+    fail: number;
+    notValidated: number;
   };
   orphanedResponsibilities: string[];
   danglingRefs: { role: string; ref: string }[];
@@ -158,6 +166,24 @@ export async function analyzeProject(root: string, config: PraxisConfig): Promis
     }
   }
 
+  // Scan cached validation results for all source documents
+  const cacheManager = new CacheManager(undefined, root);
+  const allSourceFiles = await listAllSourceFiles(root, config.sources);
+  const validation = { pass: 0, warn: 0, fail: 0, notValidated: 0 };
+
+  for (const filePath of allSourceFiles) {
+    const cached = cacheManager.readRaw({ documentPath: filePath });
+    if (!cached) {
+      validation.notValidated++;
+    } else if (cached.result.compliant) {
+      validation.pass++;
+    } else if (cached.result.severity === "warning") {
+      validation.warn++;
+    } else {
+      validation.fail++;
+    }
+  }
+
   return {
     counts: {
       roles: roleFiles.length,
@@ -165,6 +191,7 @@ export async function analyzeProject(root: string, config: PraxisConfig): Promis
       references,
       context: contextCount,
     },
+    validation,
     orphanedResponsibilities,
     danglingRefs,
     rolesMissingDescription,
@@ -191,6 +218,30 @@ async function listContentFiles(dir: string, recursive = false): Promise<string[
 }
 
 /**
+ * Lists all .md content files across all source directories.
+ *
+ * Recursively scans each source directory, excluding templates and READMEs.
+ * Returns absolute paths suitable for cache lookups.
+ */
+async function listAllSourceFiles(root: string, sources: string[]): Promise<string[]> {
+  const files: string[] = [];
+
+  for (const source of sources) {
+    const sourceDir = resolve(root, source);
+    if (!existsSync(sourceDir)) continue;
+
+    const mdFiles = await fg("**/*.md", { cwd: sourceDir, onlyFiles: true, absolute: true });
+    for (const f of mdFiles) {
+      const name = basename(f);
+      if (name === "README.md" || name.startsWith("_")) continue;
+      files.push(f);
+    }
+  }
+
+  return files;
+}
+
+/**
  * Displays the status report to the console.
  */
 function displayReport(report: StatusReport, logger: Logger): void {
@@ -200,6 +251,18 @@ function displayReport(report: StatusReport, logger: Logger): void {
   console.log(`  Responsibilities:   ${report.counts.responsibilities}`);
   console.log(`  References:         ${report.counts.references}`);
   console.log(`  Context files:      ${report.counts.context}`);
+
+  // Validation summary
+  const v = report.validation;
+  const totalDocs = v.pass + v.warn + v.fail + v.notValidated;
+  if (totalDocs > 0) {
+    console.log();
+    logger.info("Validation");
+    console.log(`  ${chalk.green("[PASS]")} ${v.pass}`);
+    console.log(`  ${chalk.yellow("[WARN]")} ${v.warn}`);
+    console.log(`  ${chalk.red("[FAIL]")} ${v.fail}`);
+    console.log(`  ${chalk.gray("[NOT VALIDATED]")} ${v.notValidated}`);
+  }
 
   let issueCount = 0;
 

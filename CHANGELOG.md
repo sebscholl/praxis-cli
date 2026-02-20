@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.1] - 2026-02-20
+
+### Added
+
+- **`praxis validate report <path>`** — New command to inspect a file's cached validation status in a readable report format. Shows one of five states: PASS, WARN, FAIL, STALE (document changed since last validation), or NOT VALIDATED. Supports `--verbose` for full AI reasoning. Requires no API key — reads only from cache.
+- **Validation coverage in `praxis status`** — The status dashboard now displays validation counts (pass/warn/fail/not validated) by reading cached results for all source documents.
+- **Not-validated count in `praxis validate all` summary** — The summary now reports the total number of source documents and shows how many lack validation (no README spec found).
+- **`/praxis:validate` slash command** — Claude Code plugin now includes a `/validate` slash command so teams with Claude Code licenses can validate documents one at a time without needing an OpenRouter API key. Written to `{outputDir}/commands/validate.md` during both `praxis init` and `praxis compile`.
+- **`CacheManager.readRaw()`** — New method that reads cached validation data without requiring a content hash, enabling the report command and status dashboard to inspect results regardless of staleness.
+
 ## [1.2.0] - 2026-02-18
 
 ### Added
@@ -90,6 +100,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Project root detection via directory marker.
 - `praxis.config.json` with `agentProfilesDir` and `plugins` options.
 
+[1.2.1]: https://github.com/zarpay/praxis-cli/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/zarpay/praxis-cli/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/zarpay/praxis-cli/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/zarpay/praxis-cli/compare/v1.0.0...v1.0.1

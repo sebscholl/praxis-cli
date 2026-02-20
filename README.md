@@ -253,6 +253,8 @@ Output is written to `agentProfilesOutputDir` (pure profiles) and to each enable
 
 Shows a project health dashboard without requiring any API keys. Scans all `sources` directories, categorizes documents by their frontmatter `type:` field, and reports content counts alongside issues like dangling references, orphaned responsibilities, missing descriptions, and unmatched owners.
 
+Also displays validation coverage by reading cached validation results for every source document, showing how many are passing, have warnings, have errors, or haven't been validated yet.
+
 ```bash
 praxis status
 ```
@@ -272,7 +274,13 @@ praxis validate all --type roles                  # Validate one type only
 praxis validate all --verbose                     # Show full AI reasoning
 praxis validate all --no-cache                    # Skip validation cache
 praxis validate ci --strict                       # CI mode (fail on warnings)
+praxis validate report roles/my-role.md           # Inspect cached validation status
+praxis validate report roles/my-role.md --verbose # Include full AI reasoning
 ```
+
+#### `praxis validate report <path>`
+
+Displays a readable report of a document's cached validation status. Shows one of five states: **PASS**, **WARN**, **FAIL**, **STALE** (document changed since last validation), or **NOT VALIDATED** (no cached result). Does not call any API — it only reads from the local cache. Use `--verbose` to include the full AI reasoning.
 
 Validation results are cached in `.praxis/cache/validation/` and automatically invalidated when document or README content changes.
 
@@ -292,7 +300,7 @@ Add `"claude-code"` to the `plugins` array to generate [Claude Code](https://doc
 }
 ```
 
-The plugin wraps each compiled profile with Claude Code YAML frontmatter and writes agent files to `plugins/praxis/agents/{alias}.md`. It also creates and maintains the `.claude-plugin/plugin.json` manifest required by Claude Code inside the plugin output directory.
+The plugin wraps each compiled profile with Claude Code YAML frontmatter and writes agent files to `plugins/praxis/agents/{alias}.md`. It also creates and maintains the `.claude-plugin/plugin.json` manifest and a `/validate` slash command inside the plugin output directory.
 
 To customize the output location or plugin name:
 
@@ -340,6 +348,16 @@ responsibilities:
 This compiles to:
 - **Pure profile:** `agent-profiles/steve.md`
 - **Claude Code agent:** `plugins/praxis/agents/steve.md` (with Claude Code frontmatter)
+
+### Validate Command
+
+The plugin includes a `/validate` slash command that lets Claude Code users validate documents without needing an OpenRouter API key. Claude Code uses its own LLM to check the document against the README specification in the same directory — the same criteria used by `praxis validate`.
+
+```
+/praxis:validate roles/my-role.md
+```
+
+This is useful for teams that have Claude Code licenses but don't distribute OpenRouter keys. Users can validate documents one at a time before CI runs the full `praxis validate` suite.
 
 ## License
 

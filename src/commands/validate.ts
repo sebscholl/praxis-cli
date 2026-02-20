@@ -1,3 +1,6 @@
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
+
 import type { Command } from "commander";
 
 import chalk from "chalk";
@@ -12,6 +15,11 @@ import {
 } from "@/validator/batch-validator.js";
 import { CacheManager } from "@/validator/cache-manager.js";
 import { DocumentValidator } from "@/validator/document-validator.js";
+import {
+  buildReport,
+  computeCurrentHash,
+  displayReport as displayValidationReport,
+} from "@/validator/report-formatter.js";
 
 /**
  * Registers the `praxis validate` command group.
@@ -167,6 +175,38 @@ export function registerValidateCommand(program: Command): void {
         process.exit(1);
       }
     });
+
+  validate
+    .command("report <path>")
+    .description("Show cached validation status for a document")
+    .option("--verbose", "show full AI reasoning", false)
+    .action(async (path: string, options: { verbose: boolean }) => {
+      const logger = new Logger();
+
+      try {
+        const paths = new Paths();
+        const cacheManager = new CacheManager(undefined, paths.root);
+
+        const absolutePath = resolve(path);
+
+        if (!existsSync(absolutePath)) {
+          logger.error(`Document not found: ${path}`);
+          process.exit(1);
+        }
+
+        const cacheData = cacheManager.readRaw({ documentPath: absolutePath });
+
+        // Use spec_path from cache if available, otherwise auto-detect
+        const specPath = cacheData?.document.spec_path ?? undefined;
+        const currentHash = computeCurrentHash(absolutePath, specPath);
+
+        const report = buildReport(absolutePath, cacheData, currentHash);
+        displayValidationReport(report, options.verbose);
+      } catch (err) {
+        logger.error(err instanceof Error ? err.message : String(err));
+        process.exit(1);
+      }
+    });
 }
 
 /**
@@ -261,6 +301,9 @@ function displaySummary(summary: ValidationSummary): void {
   console.log(`${chalk.green("[Compliant]")} ${summary.compliant}`);
   console.log(`${chalk.yellow("[Warnings]")} ${summary.warnings}`);
   console.log(`${chalk.red("[Errors]")} ${summary.errors}`);
+  if (summary.notValidated > 0) {
+    console.log(`${chalk.gray("[Not Validated]")} ${summary.notValidated} (no spec found)`);
+  }
 
   console.log();
   console.log("By type:");

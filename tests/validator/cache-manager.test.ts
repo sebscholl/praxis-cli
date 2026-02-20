@@ -1,5 +1,5 @@
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
 
@@ -170,6 +170,64 @@ describe("CacheManager", () => {
       expect(orphans.length).toBe(1);
       expect(orphans[0].reason).toBe("document_missing");
       expect(orphans[0].docName).toBe("deleted-role");
+    });
+  });
+
+  describe("readRaw()", () => {
+    const hash = "abcd1234";
+    const result = {
+      compliant: true,
+      issues: [] as string[],
+      reason: "All good",
+    };
+    const metadata = {
+      documentType: "role",
+      specPath: "roles/README.md",
+    };
+
+    it("returns full cache data without hash validation", () => {
+      const documentPath = join(projectRoot, "roles", "test-role.md");
+      manager.write({ documentPath, contentHash: hash, result, metadata });
+      const cached = manager.readRaw({ documentPath });
+
+      expect(cached).not.toBeNull();
+      expect(cached!.version).toBe("1.0");
+      expect(cached!.content_hash).toBe(hash);
+      expect(cached!.cached_at).toBeTruthy();
+      expect(cached!.document.path).toBe(documentPath);
+      expect(cached!.document.type).toBe("role");
+      expect(cached!.document.spec_path).toBe("roles/README.md");
+      expect(cached!.result).toEqual(result);
+    });
+
+    it("returns null when no cache file exists", () => {
+      const documentPath = join(projectRoot, "roles", "nonexistent.md");
+      const cached = manager.readRaw({ documentPath });
+
+      expect(cached).toBeNull();
+    });
+
+    it("returns data even when hash would not match read()", () => {
+      const documentPath = join(projectRoot, "roles", "test-role.md");
+      manager.write({ documentPath, contentHash: hash, result, metadata });
+
+      const readResult = manager.read({ documentPath, contentHash: "different" });
+      expect(readResult).toBeNull();
+
+      const rawResult = manager.readRaw({ documentPath });
+      expect(rawResult).not.toBeNull();
+      expect(rawResult!.content_hash).toBe(hash);
+    });
+
+    it("does not delete corrupt cache files", () => {
+      const documentPath = join(projectRoot, "roles", "corrupt.md");
+      const cachePath = manager.cachePathFor(documentPath);
+      mkdirSync(dirname(cachePath), { recursive: true });
+      writeFileSync(cachePath, "not valid json{{{");
+
+      const cached = manager.readRaw({ documentPath });
+      expect(cached).toBeNull();
+      expect(existsSync(cachePath)).toBe(true);
     });
   });
 

@@ -205,6 +205,35 @@ describe("ClaudeCodePlugin", () => {
     expect(pluginJson.keywords).toEqual(["ai", "agents"]);
   });
 
+  it("writes validate command to commands/ directory", () => {
+    const root = makeTmpdir();
+    const plugin = new ClaudeCodePlugin({ root, logger: new Logger() });
+
+    plugin.compile("Content", { name: "tester", description: "Test" }, "Tester");
+
+    const commandPath = join(root, "plugins", "praxis", "commands", "validate.md");
+    expect(existsSync(commandPath)).toBe(true);
+
+    const content = readFileSync(commandPath, "utf-8");
+    expect(content).toContain("description: Validate a Praxis document");
+    expect(content).toContain("$ARGUMENTS");
+    expect(content).toContain("README.md");
+  });
+
+  it("writes validate command to custom outputDir", () => {
+    const root = makeTmpdir();
+    const plugin = new ClaudeCodePlugin({
+      root,
+      logger: new Logger(),
+      pluginConfig: { name: "claude-code", outputDir: "./my-plugins/custom" },
+    });
+
+    plugin.compile("Content", { name: "tester", description: "Test" }, "Tester");
+
+    const commandPath = join(root, "my-plugins", "custom", "commands", "validate.md");
+    expect(existsSync(commandPath)).toBe(true);
+  });
+
   it("writes plugin.json only once for multiple compile calls", () => {
     const root = makeTmpdir();
     const plugin = new ClaudeCodePlugin({ root, logger: new Logger() });

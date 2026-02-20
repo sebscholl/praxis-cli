@@ -19,7 +19,7 @@ export interface CachedValidationResult {
 }
 
 /** Full cache file structure written to disk. */
-interface CacheFileData {
+export interface CacheFileData {
   version: string;
   cached_at: string;
   content_hash: string;
@@ -176,6 +176,35 @@ export class CacheManager {
       if (process.env["DEBUG"]) {
         console.warn(`Warning: Removed corrupt cache file ${cachePath} (${(err as Error).message})`);
       }
+      return null;
+    }
+  }
+
+  /**
+   * Reads the raw cache file data without hash validation.
+   *
+   * Unlike `read()`, this does not require a content hash and does not
+   * reject on hash mismatch. Returns the full cache file structure or
+   * null if no cache file exists or is unreadable. Does not delete
+   * corrupt files (purely read-only).
+   */
+  readRaw({ documentPath }: { documentPath: string }): CacheFileData | null {
+    const cachePath = this.cachePathFor(documentPath);
+
+    if (!existsSync(cachePath)) {
+      return null;
+    }
+
+    try {
+      const raw = readFileSync(cachePath, "utf-8");
+      const cached = JSON.parse(raw) as CacheFileData;
+
+      if (cached.version !== CACHE_VERSION) {
+        return null;
+      }
+
+      return cached;
+    } catch {
       return null;
     }
   }
